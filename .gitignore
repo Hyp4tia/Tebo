@@ -21,3 +21,7 @@ dist/
 # macOS noise
 .DS_Store
 ._*
+
+# Local working notes: kept on disk, deliberately not published
+.hermes/
+.hermes.md

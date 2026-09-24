@@ -2,7 +2,7 @@
   "bad-names": {
     "exit_code": 0,
     "json_bytes": 208,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/bad-names.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/bad-names.json",
     "json_parses": true,
     "log_bytes": 370,
     "top_level_len": 1,
@@ -11,7 +11,7 @@
   "big": {
     "exit_code": 0,
     "json_bytes": 4325,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/big.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/big.json",
     "json_parses": true,
     "log_bytes": 353,
     "top_level_len": 25,
@@ -20,7 +20,7 @@
   "broken": {
     "exit_code": 0,
     "json_bytes": 556,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/broken.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/broken.json",
     "json_parses": true,
     "log_bytes": 359,
     "top_level_len": 2,
@@ -29,7 +29,7 @@
   "dup": {
     "exit_code": 0,
     "json_bytes": 3199,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/dup.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/dup.json",
     "json_parses": true,
     "log_bytes": 353,
     "top_level_keys": [
@@ -44,7 +44,7 @@
   "empty-files": {
     "exit_code": 0,
     "json_bytes": 169,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/empty-files.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/empty-files.json",
     "json_parses": true,
     "log_bytes": 369,
     "top_level_len": 1,
@@ -53,7 +53,7 @@
   "empty-folders": {
     "exit_code": 0,
     "json_bytes": 188,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/empty-folders.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/empty-folders.json",
     "json_parses": true,
     "log_bytes": 373,
     "top_level_len": 2,
@@ -62,7 +62,7 @@
   "ext": {
     "exit_code": 0,
     "json_bytes": 301,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/ext.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/ext.json",
     "json_parses": true,
     "log_bytes": 353,
     "top_level_len": 1,
@@ -71,7 +71,7 @@
   "image": {
     "exit_code": 0,
     "json_bytes": 555,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/image.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/image.json",
     "json_parses": true,
     "log_bytes": 357,
     "top_level_len": 1,
@@ -80,7 +80,7 @@
   "music": {
     "exit_code": 0,
     "json_bytes": 1107,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/music.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/music.json",
     "json_parses": true,
     "log_bytes": 357,
     "top_level_len": 1,
@@ -89,7 +89,7 @@
   "symlinks": {
     "exit_code": 0,
     "json_bytes": 359,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/symlinks.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/symlinks.json",
     "json_parses": true,
     "log_bytes": 363,
     "top_level_len": 1,
@@ -98,7 +98,7 @@
   "temp": {
     "exit_code": 0,
     "json_bytes": 511,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/temp.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/temp.json",
     "json_parses": true,
     "log_bytes": 355,
     "top_level_len": 3,
@@ -107,7 +107,7 @@
   "video": {
     "exit_code": 0,
     "json_bytes": 25760,
-    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/video.json",
+    "json_file": "/Users/developer/Documents/Projects/Fun Tests/Tebo/Tests/Fixtures/czkawka/video.json",
     "json_parses": true,
     "log_bytes": 357,
     "top_level_len": 1,

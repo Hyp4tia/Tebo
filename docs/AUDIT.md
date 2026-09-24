@@ -79,7 +79,8 @@ networking code exists in the app, and the engine is invoked only with local sca
   that lets any process attach a debugger) into development-signed builds, and our Release build was
   carrying it. `scripts/release.sh` now builds with `CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO` and fails
   the release outright if the entitlement is still present.
-- Signed Apple Development (TeamIdentifier `RY4LJM4BM2`). Unnotarized by design: no Developer ID
+- Signed with an Apple Development certificate, so macOS asks for one right-click-open on
+  first launch. Unnotarized by design: no Developer ID
   certificate exists on this machine. `scripts/notarize.sh` is ready for the day one does.
 
 ## Engine output parsing: verified against captured output
