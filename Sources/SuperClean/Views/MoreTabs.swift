@@ -149,12 +149,12 @@ struct SettingsView: View {
     @State private var newEntry = ""
 
     var body: some View {
-        @Bindable var state = appState
         Form {
+            // The dry-run switch lives in the toolbar: one control for one state, always visible.
             Section("Safety") {
-                Toggle("Dry-run by default", isOn: $state.dryRunEnabled)
-                Text("Keep ON until you trust a tab. Every delete goes to Trash + log.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text("Dry-run is the toolbar switch. While it is on, every scan is a preview and nothing is deleted. With it off, removals move files to the Trash and are logged to ~/Library/Logs/superclean/operations.log.")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section("Whitelist — never touch these") {
                 ForEach(Array(appState.whitelist).sorted(), id: \.self) { entry in
@@ -176,14 +176,19 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Engines") {
-                LabeledContent("Rust engine", value: "czkawka_cli (bundled in M3, mock in M1)")
-                LabeledContent("ffmpeg", value: appState.ffmpegAvailable ? "Found" : "Not found — Similar Videos disabled")
-                Text("Sources: qarmin/czkawka (GPL-3.0) + tw93/Mole (GPL-3.0). This app is GPL-3.0.")
+                LabeledContent("czkawka_cli", value: appState.engine.summary)
+                LabeledContent(
+                    "ffmpeg",
+                    value: appState.ffmpegPath ?? "Not installed — similar videos and video checks stay disabled"
+                )
+                Button("Re-check engines") { Task { await appState.refreshTooling() } }
+                Text("czkawka_cli is MIT (qarmin/czkawka) and is bundled hash-verified. Cleanup rules are ported from tw93/Mole (GPL-3.0). See NOTICE.md.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 500, minHeight: 400)
+        .frame(minWidth: 540, minHeight: 440)
         .padding()
+        .task { await appState.refreshTooling() }
     }
 }

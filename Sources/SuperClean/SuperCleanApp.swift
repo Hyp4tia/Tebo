@@ -19,5 +19,11 @@ struct SuperCleanApp: App {
         .defaultSize(width: 1200, height: 780)
         .windowResizability(.contentMinSize)
         .windowToolbarStyle(.unified)
+
+        // The toolbar's SettingsLink() has nothing to open without this scene.
+        Settings {
+            SettingsView()
+                .environment(appState)
+        }
     }
 }

@@ -21,12 +21,23 @@ final class AppState {
     /// Loaded from ~/.config/superclean/whitelist on launch.
     var whitelist: Set<String> = []
 
-    /// Set when ffmpeg is found in PATH. Gates Similar Videos / Video Optimizer.
-    var ffmpegAvailable: Bool = false
+    /// Detected state of the bundled czkawka engine (presence + hash verification).
+    var engine: EngineStatus = .missing
+
+    /// Absolute path to ffmpeg when one is installed. Gates similar videos and video checks.
+    var ffmpegPath: String?
 
     init() {
         // Tiny file read on launch — safe on the main thread.
         self.whitelist = WhitelistStore.load()
+    }
+
+    /// Probe external tooling. Verifying the engine reads and hashes ~27 MB, so it stays off the
+    /// main actor: Settings and the scan tabs call this on appear.
+    func refreshTooling() async {
+        let status = await Task.detached(priority: .utility) { EngineLocator.locate() }.value
+        engine = status
+        ffmpegPath = EngineLocator.findFFmpeg()
     }
 
     /// Add protection + persist. Ignores blank entries.
