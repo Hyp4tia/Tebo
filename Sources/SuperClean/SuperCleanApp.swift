@@ -15,6 +15,14 @@ struct SuperCleanApp: App {
             SelfTest.run()
             exit(0)
         }
+        // `SuperClean --benchmark[=N]` measures the scan pipeline's footprint. Async, so the
+        // benchmark drives the run loop itself and exits when it is done.
+        if let iterations = SelfTest.benchmarkIterations {
+            Task {
+                await SelfTest.benchmark(iterations: iterations)
+                exit(0)
+            }
+        }
     }
 
     var body: some Scene {

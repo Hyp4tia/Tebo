@@ -223,17 +223,20 @@ public struct CleanerService: Sendable {
             seen += 1
             // Cheap periodic cancellation check (not per file).
             if seen % 256 == 0, Task.isCancelled { break }
-            guard let values = try? file.resourceValues(
-                forKeys: [.fileSizeKey, .isDirectoryKey, .isSymbolicLinkKey]
-            ) else { continue }
-            // Never descend into symlinked dirs (loop protection).
-            if values.isSymbolicLink == true, values.isDirectory == true {
-                enumerator.skipDescendants()
-                continue
-            }
-            // Count files only — directory metadata would double-count.
-            if values.isDirectory != true {
-                total += Int64(values.fileSize ?? 0)
+            // Each resourceValues lookup returns autoreleased objects. A scan can walk hundreds of
+            // thousands of files on a concurrency thread that has no run loop to drain them, so the
+            // pool is drained per file: peak memory stays flat regardless of tree size.
+            total += autoreleasepool {
+                guard let values = try? file.resourceValues(
+                    forKeys: [.fileSizeKey, .isDirectoryKey, .isSymbolicLinkKey]
+                ) else { return 0 }
+                // Never descend into symlinked dirs (loop protection).
+                if values.isSymbolicLink == true, values.isDirectory == true {
+                    enumerator.skipDescendants()
+                    return 0
+                }
+                // Count files only — directory metadata would double-count.
+                return values.isDirectory == true ? 0 : Int64(values.fileSize ?? 0)
             }
         }
         return total

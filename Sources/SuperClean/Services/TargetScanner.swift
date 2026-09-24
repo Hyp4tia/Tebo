@@ -145,14 +145,19 @@ public struct TargetScanner: Sendable {
             for path in paths {
                 if Task.isCancelled { break }
                 guard SafetyGate.isAllowed(path: path, whitelist: whitelist) else { continue }
-                let size = CleanerService().recursiveSize(at: path)
-                guard size > 0 else { continue }
-                rows.append(ScanResult(
-                    path: path,
-                    sizeBytes: size,
-                    category: target.group.rawValue,
-                    reason: reasonText(target)
-                ))
+                // Pool per candidate: measuring a big cache walks thousands of files, and each one
+                // autoreleases. Without this the footprint grows for the whole scan.
+                let row = autoreleasepool { () -> ScanResult? in
+                    let size = CleanerService().recursiveSize(at: path)
+                    guard size > 0 else { return nil }
+                    return ScanResult(
+                        path: path,
+                        sizeBytes: size,
+                        category: target.group.rawValue,
+                        reason: reasonText(target)
+                    )
+                }
+                if let row { rows.append(row) }
             }
 
             if target.kind.sweepsChildren && rows.count > Self.sweepCap {
@@ -210,10 +215,13 @@ public struct TargetScanner: Sendable {
 
     private func children(of directory: String) -> [String] {
         let url = URL(fileURLWithPath: directory)
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: url, includingPropertiesForKeys: [.isSymbolicLinkKey], options: []
-        ) else { return [] }
-        return entries.map(\.path)
+        // Pool per directory: contentsOfDirectory autoreleases a URL for every entry.
+        return autoreleasepool {
+            guard let entries = try? FileManager.default.contentsOfDirectory(
+                at: url, includingPropertiesForKeys: [.isSymbolicLinkKey], options: []
+            ) else { return [] }
+            return entries.map(\.path)
+        }
     }
 
     /// Chromium-style framework pruning: keep the version the `Current` symlink points at.
@@ -248,11 +256,15 @@ public struct TargetScanner: Sendable {
             if Task.isCancelled || out.count >= Self.rowCap { break }
             let depth = url.pathComponents.count - URL(fileURLWithPath: root).pathComponents.count
             if depth > maxDepth { enumerator.skipDescendants(); continue }
-            let values = try? url.resourceValues(forKeys: Set(keys))
-            if values?.isSymbolicLink == true { enumerator.skipDescendants(); continue }
-            if filesOnly, values?.isDirectory == true { continue }
-            guard let modified = values?.contentModificationDate, modified < cutoff else { continue }
-            out.append(url.path)
+            // Pool per entry: resourceValues autoreleases, and this walk can be long.
+            let hit = autoreleasepool { () -> Bool in
+                let values = try? url.resourceValues(forKeys: Set(keys))
+                if values?.isSymbolicLink == true { enumerator.skipDescendants(); return false }
+                if filesOnly, values?.isDirectory == true { return false }
+                guard let modified = values?.contentModificationDate, modified < cutoff else { return false }
+                return true
+            }
+            if hit { out.append(url.path) }
         }
         return out
     }
