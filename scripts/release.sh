@@ -63,6 +63,7 @@ xcodebuild \
   -derivedDataPath "$DD" \
   CODE_SIGN_STYLE=Manual \
   CODE_SIGN_IDENTITY="$IDENTITY" \
+  CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
   ENABLE_HARDENED_RUNTIME=YES \
   build 2>&1 | grep -E "error:|warning:|^\*\* |bundled czkawka_cli" || true
 APP="$DD/Build/Products/Release/$APP_NAME.app"
@@ -79,6 +80,13 @@ BUNDLE_ID="$(defaults read "$PWD/$APP/Contents/Info.plist" CFBundleIdentifier)"
 [[ -f "$APP/Contents/Resources/NOTICE.md" ]] || die "NOTICE.md missing from the bundle"
 "$APP/Contents/MacOS/$APP_NAME" --selftest | sed 's/^/    /'
 codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | sed 's/^/    /'
+# get-task-allow is a debug entitlement that lets any process attach a debugger to the shipped app.
+# Xcode injects it into development-signed builds, so the build sets
+# CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO and this asserts it actually took effect.
+if codesign -d --entitlements - "$APP" 2>&1 | grep -q "get-task-allow"; then
+  die "the app still carries get-task-allow; the release build must not be debuggable"
+fi
+echo "    entitlements: none beyond the hardened runtime"
 if [[ "$UNSIGNED" == "0" ]]; then
   # --verbose=2 is required: plain `codesign -dv` does not print Authority at all.
   codesign -dv --verbose=2 "$APP" 2>&1 | grep -q "Authority=Developer ID Application" \

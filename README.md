@@ -64,12 +64,12 @@ from `project.yml` builds a real signed `SuperClean.app`. After changing files, 
 
 | Tab | What it does | Status |
 |---|---|---|
-| Clean | Mole's ported path tables, measured on this Mac, biggest first | working |
-| Duplicates | Exact duplicates by hash, grouped, keep-one workflow | engine being wired |
-| Apps | Inventory, uninstall plan with leftovers, shared-data guard | planned |
-| Disk | Disk explorer with drill-down and largest files | planned |
-| Health | Live CPU/memory/disk/process snapshot | partial |
-| Toolbox | Purge, Installers, Fixers, History, Optimize | partial |
+| Clean | Mole's ported path tables (469 rows across 10 groups), measured on this Mac, biggest first | working |
+| Duplicates | Exact duplicates, similar images/music/video, empty folders/files, temp files, big files, via the bundled engine, with a keep-one-per-group action | working |
+| Apps | Leftovers whose owning app is gone, plus every entry it kept and why | working |
+| Disk | Volume total/free, snapshot count, and the largest files under a folder you pick | working |
+| Health | Live memory/cores/uptime plus Mole's maintenance catalog, admin tasks listed with the command to run yourself | working |
+| Toolbox | Purge, Installers, Fixers (symlinks/broken/ext/names), History | working |
 
 The honest version of that table lives in `.hermes/plans/2026-09-24_superclean-v1.0-launch.md`.
 Nothing in this app invents results: if a scan finds nothing, it says so.
