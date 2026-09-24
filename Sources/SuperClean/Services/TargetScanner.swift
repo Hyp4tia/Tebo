@@ -114,12 +114,17 @@ public struct TargetScanner: Sendable {
                 continue
             }
             if target.reportOnly {
-                let size = exists ? CleanerService().recursiveSize(at: resolved) : 0
+                // Sizing is best-effort here and deliberately skipped for whole-volume paths: walking
+                // "/" or "/Volumes" for a row we will not delete proves nothing and can take minutes.
+                let size = exists && Self.isMeasurable(resolved)
+                    ? CleanerService().recursiveSize(at: resolved)
+                    : 0
                 let sizeText = size > 0 ? " (\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))" : ""
+                let whereText = exists && !resolved.contains("*") ? " Location: \(resolved)." : ""
                 advisories.append(AdvisoryRow(
                     id: "report:\(target.label)",
                     title: target.label,
-                    detail: "\(target.explanation)\(sizeText) Not removable from here.",
+                    detail: "\(target.explanation)\(sizeText)\(whereText) Not removable from here.",
                     source: target.source
                 ))
                 continue
@@ -281,6 +286,14 @@ public struct TargetScanner: Sendable {
     }
 
     // MARK: - Text
+
+    /// True when walking this path just to report a size is reasonable. A single-component path is
+    /// a volume or system root; those belong in an advisory without a size.
+    private static func isMeasurable(_ path: String) -> Bool {
+        let normalized = SafetyGate.normalized(path)
+        guard normalized != "/" else { return false }
+        return normalized.split(separator: "/").count > 1
+    }
 
     private func reasonText(_ target: CleanTarget) -> String {
         var text = target.explanation

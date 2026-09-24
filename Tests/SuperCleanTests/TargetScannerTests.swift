@@ -209,4 +209,22 @@ struct TargetScannerTests {
         #expect(outcome.deletable.count == 1)
         #expect(outcome.deletable[0].path.hasSuffix("clean-me"))
     }
+
+    @Test("Whole-volume report rows are listed without being walked for a size")
+    func wholeVolumeReportRowSkipsSizing() async throws {
+        // /Volumes exists on every Mac and can hold a mounted share or disk image, so walking it
+        // just to print a number for a row we will not delete can take minutes. The row still
+        // appears, with its location, and without a size.
+        let outcome = await TargetScanner(home: NSHomeDirectory(), runningProcessNames: []).scan(
+            targets: [
+                target(label: "volumes", path: .absolute("/Volumes"), kind: .directory, reportOnly: true),
+            ],
+            whitelist: []
+        )
+
+        #expect(outcome.advisories.count == 1)
+        let detail = try #require(outcome.advisories.first?.detail)
+        #expect(detail.contains("/Volumes"), "the advisory must still say where the row points")
+        #expect(!detail.contains("("), "a whole-volume row must not carry a measured size")
+    }
 }

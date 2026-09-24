@@ -91,6 +91,12 @@ final class AppState {
         scanNotesByTab[tab]
     }
 
+    /// Set a tab's note directly. Used by tabs that run an external engine and have their own
+    /// failure wording (a failed engine run must never read as an empty result).
+    func setScanNote(_ note: String?, for tab: String) {
+        scanNotesByTab[tab] = note
+    }
+
     /// Record a table sweep's side output. Deletable rows are returned to the caller separately
     /// (they go through SafetyGate before they reach resultsByTab).
     func apply(_ outcome: MoleScanOutcome, to tab: String) {
