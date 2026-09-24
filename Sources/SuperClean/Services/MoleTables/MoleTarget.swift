@@ -24,6 +24,12 @@ public enum MoleGroup: String, Sendable, Equatable, CaseIterable {
     case appCaches = "App Caches"
     case browsers = "Browsers"
     case guiApps = "GUI Apps"
+    case developerTools = "Developer Tools"
+    case cloudOffice = "Cloud & Office"
+    case systemPaths = "System Paths"
+    case virtualization = "Virtualization"
+    case firmware = "Firmware"
+    case timeMachine = "Time Machine"
 }
 
 // MARK: Path
@@ -70,6 +76,9 @@ public enum MolePruneRule: Sendable, Equatable {
     /// Only numbered dirs whose `seg.x0` is older than N days are removed
     /// (NeatDM incomplete download segments).
     case staleNumberedSegments(minAgeDays: Int)
+    /// Keep the `keepCount` most-recent siblings (by mtime) and remove the
+    /// rest (Xcode DeviceSupport versions, Xcode documentation indexes).
+    case keepNewest(keepCount: Int)
 }
 
 // MARK: Process guard
@@ -180,5 +189,7 @@ public enum MolePathResolver {
 public enum MoleTables {
     public static var allTargets: [CleanTarget] {
         UserEssentials.all + AppCaches.all + Browsers.all + GuiApps.all
+            + DeveloperTools.all + CloudOffice.all + SystemPaths.all
+            + Virtualization.all + Firmware.all + TimeMachine.all
     }
 }

@@ -16,6 +16,10 @@ private let chromeGuard = MoleProcessGuard(
 private let edgeGuard = MoleProcessGuard.exact("Microsoft Edge")
 private let braveGuard = MoleProcessGuard.exact("Brave Browser")
 private let firefoxGuard = MoleProcessGuard.exact("Firefox")
+private let arcGuard = MoleProcessGuard.exact("Arc")
+private let diaGuard = MoleProcessGuard.exact("Dia")
+private let vivaldiGuard = MoleProcessGuard.exact("Vivaldi")
+private let qqBrowserGuard = MoleProcessGuard.exact("QQBrowser3")
 
 public enum Browsers {
 
@@ -44,7 +48,7 @@ public enum Browsers {
     // Absolute app-bundle rows (old-version pruning) need the full initializer.
     private static func appBundle(
         _ label: String,
-        _ appPath: String,
+        path: MolePath,
         framework: String,
         explanation: String,
         source: String,
@@ -53,7 +57,7 @@ public enum Browsers {
         CleanTarget(
             label: label,
             group: .browsers,
-            path: .absolute(appPath),
+            path: path,
             kind: .frameworkVersions(framework: framework),
             explanation: explanation,
             processGuard: processGuard,
@@ -226,7 +230,7 @@ public enum Browsers {
         ),
         appBundle(
             "Chrome old versions (system app)",
-            "/Applications/Google Chrome.app",
+            path: .absolute("/Applications/Google Chrome.app"),
             framework: "Google Chrome Framework.framework",
             explanation: "Old Chrome framework versions under Contents/Frameworks/.../Versions. Keeps the Current symlink target and any newer staged auto-update; may need elevated permissions to remove.",
             source: "mole lib/clean/user.sh:688",
@@ -234,7 +238,7 @@ public enum Browsers {
         ),
         appBundle(
             "Chrome old versions (user app)",
-            "Applications/Google Chrome.app",
+            path: .homeRelative("Applications/Google Chrome.app"),
             framework: "Google Chrome Framework.framework",
             explanation: "Same pruning for a per-user Chrome install. Keeps the Current symlink target and any newer staged auto-update.",
             source: "mole lib/clean/user.sh:693",
@@ -251,7 +255,7 @@ public enum Browsers {
         ),
         appBundle(
             "Edge old versions (system app)",
-            "/Applications/Microsoft Edge.app",
+            path: .absolute("/Applications/Microsoft Edge.app"),
             framework: "Microsoft Edge Framework.framework",
             explanation: "Old Edge framework versions. Keeps the Current symlink target and any newer staged auto-update.",
             source: "mole lib/clean/user.sh:704",
@@ -259,7 +263,7 @@ public enum Browsers {
         ),
         appBundle(
             "Edge old versions (user app)",
-            "Applications/Microsoft Edge.app",
+            path: .homeRelative("Applications/Microsoft Edge.app"),
             framework: "Microsoft Edge Framework.framework",
             explanation: "Same pruning for a per-user Edge install. Keeps the Current symlink target and any newer staged auto-update.",
             source: "mole lib/clean/user.sh:709",
@@ -381,7 +385,7 @@ public enum Browsers {
         ),
         appBundle(
             "Brave old versions (system app)",
-            "/Applications/Brave Browser.app",
+            path: .absolute("/Applications/Brave Browser.app"),
             framework: "Brave Browser Framework.framework",
             explanation: "Old Brave framework versions. Keeps the Current symlink target and any newer staged auto-update.",
             source: "mole lib/clean/user.sh:853",
@@ -389,7 +393,7 @@ public enum Browsers {
         ),
         appBundle(
             "Brave old versions (user app)",
-            "Applications/Brave Browser.app",
+            path: .homeRelative("Applications/Brave Browser.app"),
             framework: "Brave Browser Framework.framework",
             explanation: "Same pruning for a per-user Brave install. Keeps the Current symlink target and any newer staged auto-update.",
             source: "mole lib/clean/user.sh:858",
@@ -412,6 +416,570 @@ public enum Browsers {
             explanation: "Per-profile cache2 contents. Regenerated on next use; bookmarks, history and logins are untouched.",
             processGuard: firefoxGuard,
             source: "mole lib/clean/user.sh:676"
+        ),
+
+        // -- Puppeteer -----------------------------------------------------------------
+        target(
+            "Puppeteer browser cache",
+            ".cache/puppeteer",
+            kind: .directorySweep,
+            explanation: "Puppeteer's downloaded Chromium builds. Re-downloaded on demand by Puppeteer.",
+            source: "mole lib/clean/user.sh:1740"
+        ),
+
+        // -- Arc ----------------------------------------------------------------------
+        target(
+            "Arc cache",
+            "Library/Caches/company.thebrowser.Browser",
+            kind: .directorySweep,
+            explanation: "Arc's HTTP cache root. Rebuilt as you browse.",
+            source: "mole lib/clean/user.sh:1744"
+        ),
+        target(
+            "Arc code cache",
+            "Library/Application Support/Arc/*/Code Cache/*",
+            kind: .glob,
+            explanation: "Per-profile compiled JavaScript bytecode. Recompiled on next page load.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1749"
+        ),
+        target(
+            "Arc GPU cache",
+            "Library/Application Support/Arc/*/GPUCache/*",
+            kind: .glob,
+            explanation: "Per-profile GPU scratch. Rebuilt by the GPU process.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1750"
+        ),
+        target(
+            "Arc Dawn cache",
+            "Library/Application Support/Arc/*/DawnCache/*",
+            kind: .glob,
+            explanation: "Per-profile WebGPU/Dawn cache. Regenerated on next WebGPU use.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1751"
+        ),
+        target(
+            "Arc GR shader cache",
+            "Library/Application Support/Arc/*/GrShaderCache/*",
+            kind: .glob,
+            explanation: "Per-profile Skia shader cache. Recompiled as pages render.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1752"
+        ),
+        target(
+            "Arc Graphite Dawn cache",
+            "Library/Application Support/Arc/*/GraphiteDawnCache/*",
+            kind: .glob,
+            explanation: "Per-profile Graphite-backed WebGPU cache. Regenerated on demand.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1753"
+        ),
+        target(
+            "Arc shader cache",
+            "Library/Application Support/Arc/ShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level shader cache. Recompiled as pages render.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1754"
+        ),
+        target(
+            "Arc GR shader cache",
+            "Library/Application Support/Arc/GrShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Skia shader cache. Recompiled as pages render.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1755"
+        ),
+        target(
+            "Arc Dawn cache",
+            "Library/Application Support/Arc/GraphiteDawnCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Graphite/WebGPU cache. Regenerated on demand.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1756"
+        ),
+        target(
+            "Arc crash reports",
+            "Library/Application Support/Arc/Crashpad/completed",
+            kind: .directorySweep,
+            explanation: "Minidumps already offered for upload. Purely diagnostic.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1757"
+        ),
+        target(
+            "Arc code cache (User Data)",
+            "Library/Application Support/Arc/User Data/*/Code Cache/*",
+            kind: .glob,
+            explanation: "Same code-cache layout under Arc's User Data root. Recompiled on next page load.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1758"
+        ),
+        target(
+            "Arc GPU cache (User Data)",
+            "Library/Application Support/Arc/User Data/*/GPUCache/*",
+            kind: .glob,
+            explanation: "GPU scratch under Arc's User Data root. Rebuilt by the GPU process.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1759"
+        ),
+        target(
+            "Arc Dawn cache (User Data)",
+            "Library/Application Support/Arc/User Data/*/DawnCache/*",
+            kind: .glob,
+            explanation: "WebGPU/Dawn cache under Arc's User Data root. Regenerated on demand.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1760"
+        ),
+        target(
+            "Arc GR shader cache (User Data)",
+            "Library/Application Support/Arc/User Data/*/GrShaderCache/*",
+            kind: .glob,
+            explanation: "Skia shader cache under Arc's User Data root. Recompiled as pages render.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1761"
+        ),
+        target(
+            "Arc Graphite Dawn cache (User Data)",
+            "Library/Application Support/Arc/User Data/*/GraphiteDawnCache/*",
+            kind: .glob,
+            explanation: "Graphite/WebGPU cache under Arc's User Data root. Regenerated on demand.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1762"
+        ),
+        target(
+            "Arc shader cache (User Data)",
+            "Library/Application Support/Arc/User Data/ShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level shader cache under User Data. Recompiled as pages render.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1763"
+        ),
+        target(
+            "Arc GR shader cache (User Data)",
+            "Library/Application Support/Arc/User Data/GrShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Skia shader cache under User Data. Recompiled as pages render.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1764"
+        ),
+        target(
+            "Arc Dawn cache (User Data)",
+            "Library/Application Support/Arc/User Data/GraphiteDawnCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Graphite cache under User Data. Regenerated on demand.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1765"
+        ),
+        target(
+            "Arc component CRX cache",
+            "Library/Application Support/Arc/User Data/component_crx_cache",
+            kind: .directorySweep,
+            explanation: "Component-updater extension payloads. Re-downloaded by the updater.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1766"
+        ),
+        target(
+            "Arc extensions CRX cache",
+            "Library/Application Support/Arc/User Data/extensions_crx_cache",
+            kind: .directorySweep,
+            explanation: "Extension CRX payload cache. Re-fetched by the extension updater.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1767"
+        ),
+        target(
+            "Arc crash reports (User Data)",
+            "Library/Application Support/Arc/User Data/Crashpad/completed",
+            kind: .directorySweep,
+            explanation: "Minidumps already offered for upload. Purely diagnostic.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1768"
+        ),
+        target(
+            "Arc service worker cache",
+            "Library/Application Support/Arc/*/Service Worker/CacheStorage",
+            kind: .glob,
+            explanation: "Per-origin service-worker CacheStorage; MV3 ScriptCache is never touched.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1771"
+        ),
+        target(
+            "Arc service worker cache (User Data)",
+            "Library/Application Support/Arc/User Data/*/Service Worker/CacheStorage",
+            kind: .glob,
+            explanation: "Service-worker CacheStorage under Arc's User Data root; ScriptCache is never touched.",
+            processGuard: arcGuard,
+            source: "mole lib/clean/user.sh:1775"
+        ),
+
+        // -- Dia ------------------------------------------------------------------------
+        target(
+            "Dia cache",
+            "Library/Caches/company.thebrowser.dia",
+            kind: .directorySweep,
+            explanation: "Dia's bundle-ID cache root. Sparkle update state is protected upstream; the rest is rebuildable.",
+            source: "mole lib/clean/user.sh:1783"
+        ),
+        target(
+            "Dia HTTP cache",
+            "Library/Caches/Dia/User Data/*/Cache/*",
+            kind: .glob,
+            explanation: "Per-profile HTTP cache. Rebuilt as you browse.",
+            processGuard: diaGuard,
+            source: "mole lib/clean/user.sh:1795"
+        ),
+        target(
+            "Dia code cache",
+            "Library/Caches/Dia/User Data/*/Code Cache/*",
+            kind: .glob,
+            explanation: "Per-profile compiled bytecode. Recompiled on next page load.",
+            processGuard: diaGuard,
+            source: "mole lib/clean/user.sh:1796"
+        ),
+        target(
+            "Dia Graphite Dawn cache",
+            "Library/Application Support/Dia/User Data/GraphiteDawnCache",
+            kind: .directorySweep,
+            explanation: "Graphite/WebGPU cache. Regenerated on demand.",
+            processGuard: diaGuard,
+            source: "mole lib/clean/user.sh:1797"
+        ),
+        target(
+            "Dia GPU cache",
+            "Library/Application Support/Dia/User Data/GPUPersistentCache",
+            kind: .directorySweep,
+            explanation: "Persistent GPU cache. Rebuilt by the GPU process.",
+            processGuard: diaGuard,
+            source: "mole lib/clean/user.sh:1798"
+        ),
+        target(
+            "Dia component CRX cache",
+            "Library/Application Support/Dia/User Data/component_crx_cache",
+            kind: .directorySweep,
+            explanation: "Component-updater payloads. Re-downloaded by the updater.",
+            processGuard: diaGuard,
+            source: "mole lib/clean/user.sh:1799"
+        ),
+        target(
+            "Dia extensions CRX cache",
+            "Library/Application Support/Dia/User Data/extensions_crx_cache",
+            kind: .directorySweep,
+            explanation: "Extension CRX payload cache. Re-fetched on demand.",
+            processGuard: diaGuard,
+            source: "mole lib/clean/user.sh:1800"
+        ),
+        target(
+            "Dia Dawn Graphite cache",
+            "Library/Application Support/Dia/User Data/*/DawnGraphiteCache/*",
+            kind: .glob,
+            explanation: "Per-profile Dawn Graphite cache. Regenerated on demand.",
+            processGuard: diaGuard,
+            source: "mole lib/clean/user.sh:1801"
+        ),
+        target(
+            "Dia Dawn WebGPU cache",
+            "Library/Application Support/Dia/User Data/*/DawnWebGPUCache/*",
+            kind: .glob,
+            explanation: "Per-profile Dawn WebGPU cache. Regenerated on demand.",
+            processGuard: diaGuard,
+            source: "mole lib/clean/user.sh:1802"
+        ),
+        target(
+            "Dia GPU cache (per profile)",
+            "Library/Application Support/Dia/User Data/*/GPUCache/*",
+            kind: .glob,
+            explanation: "Per-profile GPU scratch. Rebuilt by the GPU process.",
+            processGuard: diaGuard,
+            source: "mole lib/clean/user.sh:1803"
+        ),
+        target(
+            "Dia service worker cache",
+            "Library/Application Support/Dia/User Data/*/Service Worker/CacheStorage",
+            kind: .glob,
+            explanation: "Per-origin service-worker CacheStorage; MV3 ScriptCache is never touched.",
+            processGuard: diaGuard,
+            source: "mole lib/clean/user.sh:1812"
+        ),
+
+        // -- Helium ----------------------------------------------------------------------
+        target(
+            "Helium cache",
+            "Library/Caches/net.imput.helium",
+            kind: .directorySweep,
+            explanation: "Helium's cache root. Rebuilt as you browse.",
+            source: "mole lib/clean/user.sh:1839"
+        ),
+        target(
+            "Helium GPU cache",
+            "Library/Application Support/net.imput.helium/*/GPUCache/*",
+            kind: .glob,
+            explanation: "Per-profile GPU scratch. Rebuilt by the GPU process.",
+            source: "mole lib/clean/user.sh:1840"
+        ),
+        target(
+            "Helium component cache",
+            "Library/Application Support/net.imput.helium/component_crx_cache",
+            kind: .directorySweep,
+            explanation: "Component-updater payloads. Re-downloaded by the updater.",
+            source: "mole lib/clean/user.sh:1841"
+        ),
+        target(
+            "Helium extensions cache",
+            "Library/Application Support/net.imput.helium/extensions_crx_cache",
+            kind: .directorySweep,
+            explanation: "Extension CRX payload cache. Re-fetched on demand.",
+            source: "mole lib/clean/user.sh:1842"
+        ),
+        target(
+            "Helium shader cache",
+            "Library/Application Support/net.imput.helium/GrShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Skia shader cache. Recompiled as pages render.",
+            source: "mole lib/clean/user.sh:1843"
+        ),
+        target(
+            "Helium Dawn cache",
+            "Library/Application Support/net.imput.helium/GraphiteDawnCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Graphite/WebGPU cache. Regenerated on demand.",
+            source: "mole lib/clean/user.sh:1844"
+        ),
+        target(
+            "Helium shader cache (ShaderCache)",
+            "Library/Application Support/net.imput.helium/ShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level shader cache. Recompiled as pages render.",
+            source: "mole lib/clean/user.sh:1845"
+        ),
+        target(
+            "Helium app cache",
+            "Library/Application Support/net.imput.helium/*/Application Cache/*",
+            kind: .glob,
+            explanation: "Per-profile legacy app cache. Regenerated by the pages that use it.",
+            source: "mole lib/clean/user.sh:1846"
+        ),
+
+        // -- Yandex -----------------------------------------------------------------------
+        target(
+            "Yandex cache",
+            "Library/Caches/Yandex/YandexBrowser",
+            kind: .directorySweep,
+            explanation: "Yandex Browser's HTTP cache root. Rebuilt as you browse.",
+            source: "mole lib/clean/user.sh:1850"
+        ),
+        target(
+            "Yandex shader cache",
+            "Library/Application Support/Yandex/YandexBrowser/ShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level shader cache. Recompiled as pages render.",
+            source: "mole lib/clean/user.sh:1851"
+        ),
+        target(
+            "Yandex GR shader cache",
+            "Library/Application Support/Yandex/YandexBrowser/GrShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Skia shader cache. Recompiled as pages render.",
+            source: "mole lib/clean/user.sh:1852"
+        ),
+        target(
+            "Yandex Dawn cache",
+            "Library/Application Support/Yandex/YandexBrowser/GraphiteDawnCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Graphite/WebGPU cache. Regenerated on demand.",
+            source: "mole lib/clean/user.sh:1853"
+        ),
+        target(
+            "Yandex GPU cache",
+            "Library/Application Support/Yandex/YandexBrowser/*/GPUCache/*",
+            kind: .glob,
+            explanation: "Per-profile GPU scratch. Rebuilt by the GPU process.",
+            source: "mole lib/clean/user.sh:1854"
+        ),
+
+        // -- Opera --------------------------------------------------------------------------
+        target(
+            "Opera cache",
+            "Library/Caches/com.operasoftware.Opera",
+            kind: .directorySweep,
+            explanation: "Opera's cache root. Rebuilt as you browse.",
+            source: "mole lib/clean/user.sh:1872"
+        ),
+
+        // -- Vivaldi ------------------------------------------------------------------------
+        target(
+            "Vivaldi cache",
+            "Library/Caches/com.vivaldi.Vivaldi",
+            kind: .directorySweep,
+            explanation: "Vivaldi's HTTP cache root. Rebuilt as you browse.",
+            source: "mole lib/clean/user.sh:1875"
+        ),
+        target(
+            "Vivaldi code cache",
+            "Library/Application Support/Vivaldi/*/Code Cache/*",
+            kind: .glob,
+            explanation: "Per-profile compiled bytecode. Recompiled on next page load.",
+            processGuard: vivaldiGuard,
+            source: "mole lib/clean/user.sh:1880"
+        ),
+        target(
+            "Vivaldi GPU cache",
+            "Library/Application Support/Vivaldi/*/GPUCache/*",
+            kind: .glob,
+            explanation: "Per-profile GPU scratch. Rebuilt by the GPU process.",
+            processGuard: vivaldiGuard,
+            source: "mole lib/clean/user.sh:1881"
+        ),
+        target(
+            "Vivaldi Dawn cache",
+            "Library/Application Support/Vivaldi/*/DawnCache/*",
+            kind: .glob,
+            explanation: "Per-profile WebGPU/Dawn cache. Regenerated on demand.",
+            processGuard: vivaldiGuard,
+            source: "mole lib/clean/user.sh:1882"
+        ),
+        target(
+            "Vivaldi GR shader cache",
+            "Library/Application Support/Vivaldi/*/GrShaderCache/*",
+            kind: .glob,
+            explanation: "Per-profile Skia shader cache. Recompiled as pages render.",
+            processGuard: vivaldiGuard,
+            source: "mole lib/clean/user.sh:1883"
+        ),
+        target(
+            "Vivaldi Graphite Dawn cache",
+            "Library/Application Support/Vivaldi/*/GraphiteDawnCache/*",
+            kind: .glob,
+            explanation: "Per-profile Graphite-backed WebGPU cache. Regenerated on demand.",
+            processGuard: vivaldiGuard,
+            source: "mole lib/clean/user.sh:1884"
+        ),
+        target(
+            "Vivaldi shader cache",
+            "Library/Application Support/Vivaldi/ShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level shader cache. Recompiled as pages render.",
+            processGuard: vivaldiGuard,
+            source: "mole lib/clean/user.sh:1885"
+        ),
+        target(
+            "Vivaldi GR shader cache",
+            "Library/Application Support/Vivaldi/GrShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Skia shader cache. Recompiled as pages render.",
+            processGuard: vivaldiGuard,
+            source: "mole lib/clean/user.sh:1886"
+        ),
+        target(
+            "Vivaldi Dawn cache",
+            "Library/Application Support/Vivaldi/GraphiteDawnCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Graphite/WebGPU cache. Regenerated on demand.",
+            processGuard: vivaldiGuard,
+            source: "mole lib/clean/user.sh:1887"
+        ),
+        target(
+            "Vivaldi crash reports",
+            "Library/Application Support/Vivaldi/Crashpad/completed",
+            kind: .directorySweep,
+            explanation: "Minidumps already offered for upload. Purely diagnostic.",
+            processGuard: vivaldiGuard,
+            source: "mole lib/clean/user.sh:1888"
+        ),
+        target(
+            "Vivaldi service worker cache",
+            "Library/Application Support/Vivaldi/*/Service Worker/CacheStorage",
+            kind: .glob,
+            explanation: "Per-origin service-worker CacheStorage; MV3 ScriptCache is never touched.",
+            processGuard: vivaldiGuard,
+            source: "mole lib/clean/user.sh:1891"
+        ),
+
+        // -- Comet / Orion / Zen ---------------------------------------------------------------
+        target(
+            "Comet cache",
+            "Library/Caches/Comet",
+            kind: .directorySweep,
+            explanation: "Comet browser's cache root. Rebuilt as you browse.",
+            source: "mole lib/clean/user.sh:1894"
+        ),
+        target(
+            "Orion cache",
+            "Library/Caches/com.kagi.kagimacOS",
+            kind: .directorySweep,
+            explanation: "Orion (Kagi) browser's cache root. Rebuilt as you browse.",
+            source: "mole lib/clean/user.sh:1895"
+        ),
+        target(
+            "Zen cache",
+            "Library/Caches/zen",
+            kind: .directorySweep,
+            explanation: "Zen browser's cache root. Rebuilt as you browse.",
+            source: "mole lib/clean/user.sh:1896"
+        ),
+
+        // -- QQ Browser ------------------------------------------------------------------------
+        target(
+            "QQ Browser cache",
+            "Library/Caches/com.tencent.QQBrowser3",
+            kind: .directorySweep,
+            explanation: "QQ Browser 3 (Chromium) cache root. Rebuilt as you browse.",
+            source: "mole lib/clean/user.sh:1903"
+        ),
+        target(
+            "QQ Browser code cache",
+            "Library/Application Support/QQBrowser3/*/Code Cache/*",
+            kind: .glob,
+            explanation: "Per-profile compiled bytecode. Recompiled on next page load.",
+            processGuard: qqBrowserGuard,
+            source: "mole lib/clean/user.sh:1907"
+        ),
+        target(
+            "QQ Browser GPU cache",
+            "Library/Application Support/QQBrowser3/*/GPUCache/*",
+            kind: .glob,
+            explanation: "Per-profile GPU scratch. Rebuilt by the GPU process.",
+            processGuard: qqBrowserGuard,
+            source: "mole lib/clean/user.sh:1908"
+        ),
+        target(
+            "QQ Browser shader cache",
+            "Library/Application Support/QQBrowser3/ShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level shader cache. Recompiled as pages render.",
+            processGuard: qqBrowserGuard,
+            source: "mole lib/clean/user.sh:1909"
+        ),
+        target(
+            "QQ Browser GR shader cache",
+            "Library/Application Support/QQBrowser3/GrShaderCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Skia shader cache. Recompiled as pages render.",
+            processGuard: qqBrowserGuard,
+            source: "mole lib/clean/user.sh:1910"
+        ),
+        target(
+            "QQ Browser Dawn cache",
+            "Library/Application Support/QQBrowser3/GraphiteDawnCache",
+            kind: .directorySweep,
+            explanation: "Browser-level Graphite/WebGPU cache. Regenerated on demand.",
+            processGuard: qqBrowserGuard,
+            source: "mole lib/clean/user.sh:1911"
+        ),
+        target(
+            "QQ Browser component cache",
+            "Library/Application Support/QQBrowser3/component_crx_cache",
+            kind: .directorySweep,
+            explanation: "Component-updater payloads. Re-downloaded by the updater.",
+            processGuard: qqBrowserGuard,
+            source: "mole lib/clean/user.sh:1912"
+        ),
+        target(
+            "QQ Browser crash reports",
+            "Library/Application Support/QQBrowser3/Crashpad/completed",
+            kind: .directorySweep,
+            explanation: "Minidumps already offered for upload. Purely diagnostic.",
+            processGuard: qqBrowserGuard,
+            source: "mole lib/clean/user.sh:1913"
         ),
     ]
 }

@@ -5,9 +5,9 @@ import Testing
 // MARK: - MoleTables tests
 // The tables are DATA ported from tw93/Mole's bash (GPL-3.0). These tests pin
 // the invariants a scanner depends on: complete rows, traceable sources,
-// unique paths per table, nothing pointing at system territory, everything
-// resolving under the current user's home, and a stable count per group so
-// accidental table shrinkage fails the build.
+// unique paths per table, nothing pipeline-deletable pointing at system
+// territory, everything resolving to an absolute path, and a stable count per
+// group so accidental table shrinkage fails the build.
 // Run: swift test
 
 private extension MoleTablesTests {
@@ -26,45 +26,51 @@ private extension MoleTablesTests {
 @Suite("MoleTables")
 struct MoleTablesTests {
 
+    /// Every table, newest first, with the group it must belong to.
+    private static let tables: [(name: String, rows: [CleanTarget], group: MoleGroup)] = [
+        ("UserEssentials", UserEssentials.all, .userEssentials),
+        ("AppCaches", AppCaches.all, .appCaches),
+        ("Browsers", Browsers.all, .browsers),
+        ("GuiApps", GuiApps.all, .guiApps),
+        ("DeveloperTools", DeveloperTools.all, .developerTools),
+        ("CloudOffice", CloudOffice.all, .cloudOffice),
+        ("SystemPaths", SystemPaths.all, .systemPaths),
+        ("Virtualization", Virtualization.all, .virtualization),
+        ("Firmware", Firmware.all, .firmware),
+        ("TimeMachine", TimeMachine.all, .timeMachine),
+    ]
+
     // MARK: - Table shape
 
     @Test("Every table is non-empty")
     func tablesNonEmpty() {
-        #expect(!UserEssentials.all.isEmpty)
-        #expect(!AppCaches.all.isEmpty)
-        #expect(!Browsers.all.isEmpty)
-        #expect(!GuiApps.all.isEmpty)
+        for (name, rows, _) in Self.tables {
+            #expect(!rows.isEmpty, "\\(name) table is empty")
+        }
     }
 
     @Test("Every row has label, group, explanation and source")
     func rowsComplete() {
-        for (table, group) in [
-            (UserEssentials.all, MoleGroup.userEssentials),
-            (AppCaches.all, MoleGroup.appCaches),
-            (Browsers.all, MoleGroup.browsers),
-            (GuiApps.all, MoleGroup.guiApps),
-        ] {
-            for row in table {
-                #expect(!row.label.isEmpty, "empty label in \(group.rawValue)")
-                #expect(row.group == group, "\(row.label) in wrong group")
-                #expect(!row.explanation.isEmpty, "no explanation for \(row.label)")
-                #expect(!row.source.isEmpty, "no source for \(row.label)")
-                #expect(row.source.hasPrefix("mole lib/clean/"), "unexpected source format: \(row.source)")
+        for (_, rows, group) in Self.tables {
+            for row in rows {
+                #expect(!row.label.isEmpty, "empty label in \\(group.rawValue)")
+                #expect(row.group == group, "\\(row.label) in wrong group")
+                #expect(!row.explanation.isEmpty, "no explanation for \\(row.label)")
+                #expect(!row.source.isEmpty, "no source for \\(row.label)")
+                #expect(row.source.hasPrefix("mole lib/"), "unexpected source format: \\(row.source)")
             }
         }
     }
 
     @Test("No duplicate paths within a table")
     func noDuplicatePaths() {
-        for (table, name) in [
-            (UserEssentials.all, "UserEssentials"),
-            (AppCaches.all, "AppCaches"),
-            (Browsers.all, "Browsers"),
-            (GuiApps.all, "GuiApps"),
-        ] {
-            let raws = table.map { row -> String in
+        for (name, rows, _) in Self.tables {
+            // Admin-only rows are report-only by construction; several legitimately
+            // share one find root (e.g. /private/var/folders) with different
+            // predicates, and the pipeline never scans them anyway.
+            let raws = rows.filter { !$0.needsAdmin }.map { row -> String in
                 switch row.path {
-                case .homeRelative(let relative): return "~/" + relative
+                case .homeRelative(let relative): return "~/\(relative)"
                 case .absolute(let absolute): return absolute
                 }
             }
@@ -74,7 +80,7 @@ struct MoleTablesTests {
 
     // MARK: - Safety
 
-    @Test("No row points at a protected or critical system path")
+    @Test("Pipeline-deletable rows never point at protected or critical system paths")
     func noProtectedSystemPaths() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let protectedPrefixes = [
@@ -82,14 +88,17 @@ struct MoleTablesTests {
             "/private/var", "/private/etc", "/Volumes",
         ]
         for row in MoleTables.allTargets {
+            // Admin-only rows are report-only by construction and can point at
+            // system territory for display; the pipeline never deletes them.
+            if row.needsAdmin { continue }
             let prefix = resolvedPrefix(row, home: home)
-            #expect(!prefix.isEmpty, "\(row.label): empty resolved path")
-            #expect(prefix != "/", "\(row.label): points at filesystem root")
-            #expect(prefix != home, "\(row.label): points at the whole home directory")
+            #expect(!prefix.isEmpty, "\\(row.label): empty resolved path")
+            #expect(prefix != "/", "\\(row.label): points at filesystem root")
+            #expect(prefix != home, "\\(row.label): points at the whole home directory")
             for protected in protectedPrefixes {
                 #expect(
                     !prefix.hasPrefix(protected),
-                    "\(row.label): protected path \(prefix) (source \(row.source))"
+                    "\\(row.label): protected path \\(prefix) (source \\(row.source))"
                 )
             }
         }
@@ -98,15 +107,47 @@ struct MoleTablesTests {
     @Test("Home-relative rows resolve under the current user's home")
     func homeRelativeRowsResolveUnderHome() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        for table in [UserEssentials.all, AppCaches.all, Browsers.all, GuiApps.all] {
-            for row in table {
+        for (_, rows, _) in Self.tables {
+            for row in rows {
                 guard case .homeRelative = row.path else { continue }
                 let prefix = resolvedPrefix(row, home: home)
                 #expect(
                     prefix.hasPrefix(home + "/"),
-                    "\(row.label): \(prefix) not under home (source \(row.source))"
+                    "\\(row.label): \\(prefix) not under home (source \\(row.source))"
                 )
             }
+        }
+    }
+
+    @Test("Every target resolves to an absolute path")
+    func everyTargetResolvesToAbsolutePath() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        for row in MoleTables.allTargets {
+            let resolved = MolePathResolver.resolve(row.path, home: home)
+            #expect(resolved.hasPrefix("/"), "\\(row.label): \\(resolved) is not absolute")
+        }
+    }
+
+    @Test("No .safe target path points at a real user-data location")
+    func noSafeTargetUnderUserData() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let userDataDirs = ["Trash", "Desktop", "Documents", "Movies", "Pictures"]
+        for row in MoleTables.allTargets where row.risk == .safe {
+            let prefix = resolvedPrefix(row, home: home)
+            for dir in userDataDirs {
+                let dirPath = (home as NSString).appendingPathComponent(dir)
+                #expect(
+                    prefix != dirPath && !prefix.hasPrefix(dirPath + "/"),
+                    "\\(row.label) (.safe) points at user data \\(dirPath) (source \\(row.source))"
+                )
+            }
+        }
+    }
+
+    @Test("Rows needing admin are never pipeline-deletable")
+    func needsAdminRowsAreReportOnly() {
+        for row in MoleTables.allTargets where row.needsAdmin {
+            #expect(row.reportOnly, "\\(row.label) needs admin but is not report-only")
         }
     }
 
@@ -117,14 +158,24 @@ struct MoleTablesTests {
         let byGroup = Dictionary(grouping: MoleTables.allTargets, by: \.group)
         #expect(byGroup[.userEssentials]?.count == 17)
         #expect(byGroup[.appCaches]?.count == 37)
-        #expect(byGroup[.browsers]?.count == 43)
-        #expect(byGroup[.guiApps]?.count == 79)
+        #expect(byGroup[.browsers]?.count == 114)
+        #expect(byGroup[.guiApps]?.count == 187)
+        #expect(byGroup[.developerTools]?.count == 60)
+        #expect(byGroup[.cloudOffice]?.count == 21)
+        #expect(byGroup[.systemPaths]?.count == 16)
+        #expect(byGroup[.virtualization]?.count == 11)
+        #expect(byGroup[.firmware]?.count == 4)
+        #expect(byGroup[.timeMachine]?.count == 2)
+        // Every declared group is non-zero — no empty sections.
+        for group in MoleGroup.allCases {
+            let count = byGroup[group]?.count ?? 0
+            #expect(count > 0, "group \\(group.rawValue) has no rows")
+        }
     }
 
     @Test("Aggregate table equals the sum of its parts")
     func aggregateMatchesSum() {
-        let sum = UserEssentials.all.count + AppCaches.all.count
-            + Browsers.all.count + GuiApps.all.count
+        let sum = Self.tables.reduce(0) { $0 + $1.rows.count }
         #expect(MoleTables.allTargets.count == sum)
     }
 }
