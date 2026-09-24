@@ -1,0 +1,44 @@
+# project.yml — generates SuperClean.xcodeproj via `xcodegen generate`
+# Why: Swift Packages can't Cmd+R as a real .app (no bundle ID → linkd errors).
+# A real Xcode project gives you Cmd+R = build SuperClean.app + launch window.
+# Usage: xcodegen generate  →  open SuperClean.xcodeproj
+
+name: SuperClean
+options:
+  bundleIdPrefix: com.superclean
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+
+settings:
+  SWIFT_VERSION: "6.0"
+  SWIFT_STRICT_CONCURRENCY: complete
+  MACOSX_DEPLOYMENT_TARGET: "14.0"
+  CODE_SIGN_STYLE: Automatic
+  DEVELOPMENT_TEAM: ""  # fill in Xcode → Signing & Capabilities if you want to notarize
+
+targets:
+  SuperClean:
+    type: application
+    platform: macOS
+    bundleId: com.superclean.app
+    sources:
+      - path: Sources/SuperClean
+    info:
+      path: Resources/Info.plist
+    entitlements:
+      path: Resources/SuperClean.entitlements
+    settings:
+      PRODUCT_NAME: SuperClean
+      INFOPLIST_FILE: Resources/Info.plist
+      CODE_SIGN_ENTITLEMENTS: Resources/SuperClean.entitlements
+      COMBINE_HIDPI_IMAGES: YES
+
+  SuperCleanTests:
+    type: bundle.unit-test
+    platform: macOS
+    bundleId: com.superclean.app.tests
+    sources:
+      - path: Tests/SuperCleanTests
+    dependencies:
+      - target: SuperClean

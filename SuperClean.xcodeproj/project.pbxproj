@@ -1,0 +1,485 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0F73CE903B9A7ECFC562686A /* OperationLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DD22A660438A89647DE01D /* OperationLog.swift */; };
+		1902B59F379422440774F07F /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70FA72D8E1DD2FCBB76EDCBC /* AppState.swift */; };
+		200A27AA392A80D287254DC8 /* CzkawkaBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66517CB76B58EF2A02D55B0D /* CzkawkaBridge.swift */; };
+		4AC03320BCDA099F90AFA5D3 /* CleanerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0F59ABEB562B36A67A40D5D /* CleanerService.swift */; };
+		685BD0E58F59EE513F34DE90 /* SuperCleanApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13014F2AF1267F91D5D19EE3 /* SuperCleanApp.swift */; };
+		6AA8C43D6CF2E1A51CFB351B /* ScanTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A911385D4ACB23329422DA /* ScanTab.swift */; };
+		70C4DF385DEE5A2A7928FEC9 /* MolePaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 983D0503D8BB06A309ADA54C /* MolePaths.swift */; };
+		8F4FE9F9D71C0144A4AAD2A0 /* SafetyGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB12BA38C38B74BFB3071995 /* SafetyGate.swift */; };
+		90707E07B8DC85C3566EA45A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA91FB5E6861452716917BE /* ContentView.swift */; };
+		A6BD5C340A5D33379E428E1E /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1920908571805E9745B7091 /* SharedViews.swift */; };
+		A78CD59B160046854C998583 /* WhitelistStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6746195083910F043FE043F0 /* WhitelistStore.swift */; };
+		BC2BEE6D247E43D99CF1B9BB /* ScanResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF6B45ECD3812701ED018AEA /* ScanResult.swift */; };
+		D01167A292C8CE958398919C /* WhitelistStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCD0DBB5D628EC14B2975927 /* WhitelistStoreTests.swift */; };
+		DFD91F5AFF7AC116889A31F4 /* SafetyGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6517E0B4F5F7B188AFD379DE /* SafetyGateTests.swift */; };
+		F308026603A6E172FA0C1251 /* MoreTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50EAFBF51FEC5F912010BB06 /* MoreTabs.swift */; };
+		F97648AA7B7181844E22B2BC /* MainTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24C0ADCCEC11D3D8FA82D775 /* MainTabs.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		2556A97B8054D6F638600510 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2D6C6B0A617282E1DF078929 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CA3F679C81881198DC6C2E83;
+			remoteInfo = SuperClean;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		13014F2AF1267F91D5D19EE3 /* SuperCleanApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuperCleanApp.swift; sourceTree = "<group>"; };
+		24C0ADCCEC11D3D8FA82D775 /* MainTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabs.swift; sourceTree = "<group>"; };
+		29D3CC488121C29BA83C4007 /* SuperCleanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SuperCleanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		50EAFBF51FEC5F912010BB06 /* MoreTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreTabs.swift; sourceTree = "<group>"; };
+		6517E0B4F5F7B188AFD379DE /* SafetyGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyGateTests.swift; sourceTree = "<group>"; };
+		66517CB76B58EF2A02D55B0D /* CzkawkaBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CzkawkaBridge.swift; sourceTree = "<group>"; };
+		6746195083910F043FE043F0 /* WhitelistStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistStore.swift; sourceTree = "<group>"; };
+		70FA72D8E1DD2FCBB76EDCBC /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		7254AB2B871A1B97F2920590 /* SuperClean.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SuperClean.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		983D0503D8BB06A309ADA54C /* MolePaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MolePaths.swift; sourceTree = "<group>"; };
+		ADA91FB5E6861452716917BE /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B0F59ABEB562B36A67A40D5D /* CleanerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanerService.swift; sourceTree = "<group>"; };
+		BCD0DBB5D628EC14B2975927 /* WhitelistStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistStoreTests.swift; sourceTree = "<group>"; };
+		D9A911385D4ACB23329422DA /* ScanTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanTab.swift; sourceTree = "<group>"; };
+		DB12BA38C38B74BFB3071995 /* SafetyGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyGate.swift; sourceTree = "<group>"; };
+		E1920908571805E9745B7091 /* SharedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedViews.swift; sourceTree = "<group>"; };
+		EF6B45ECD3812701ED018AEA /* ScanResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanResult.swift; sourceTree = "<group>"; };
+		F3DD22A660438A89647DE01D /* OperationLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationLog.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0CF4D289824B09F0EEF31B52 = {
+			isa = PBXGroup;
+			children = (
+				B8C71618B066219D268D6E0C /* SuperClean */,
+				49D28C8660F8B8CAAA7CDC13 /* SuperCleanTests */,
+				FD5FE48CBD1C3BEEE4EFB9E4 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1447F55700E33B54E4541E90 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B0F59ABEB562B36A67A40D5D /* CleanerService.swift */,
+				66517CB76B58EF2A02D55B0D /* CzkawkaBridge.swift */,
+				983D0503D8BB06A309ADA54C /* MolePaths.swift */,
+				F3DD22A660438A89647DE01D /* OperationLog.swift */,
+				DB12BA38C38B74BFB3071995 /* SafetyGate.swift */,
+				6746195083910F043FE043F0 /* WhitelistStore.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		49D28C8660F8B8CAAA7CDC13 /* SuperCleanTests */ = {
+			isa = PBXGroup;
+			children = (
+				6517E0B4F5F7B188AFD379DE /* SafetyGateTests.swift */,
+				BCD0DBB5D628EC14B2975927 /* WhitelistStoreTests.swift */,
+			);
+			name = SuperCleanTests;
+			path = Tests/SuperCleanTests;
+			sourceTree = "<group>";
+		};
+		4DB64C8D8A78DF90E12CEAE9 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				70FA72D8E1DD2FCBB76EDCBC /* AppState.swift */,
+				EF6B45ECD3812701ED018AEA /* ScanResult.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		B185747DD1BC03D8343A2CBB /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				24C0ADCCEC11D3D8FA82D775 /* MainTabs.swift */,
+				50EAFBF51FEC5F912010BB06 /* MoreTabs.swift */,
+				B27A67EAA6A575456DE38AE1 /* Shared */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		B27A67EAA6A575456DE38AE1 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				D9A911385D4ACB23329422DA /* ScanTab.swift */,
+				E1920908571805E9745B7091 /* SharedViews.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		B8C71618B066219D268D6E0C /* SuperClean */ = {
+			isa = PBXGroup;
+			children = (
+				ADA91FB5E6861452716917BE /* ContentView.swift */,
+				13014F2AF1267F91D5D19EE3 /* SuperCleanApp.swift */,
+				4DB64C8D8A78DF90E12CEAE9 /* Models */,
+				1447F55700E33B54E4541E90 /* Services */,
+				B185747DD1BC03D8343A2CBB /* Views */,
+			);
+			name = SuperClean;
+			path = Sources/SuperClean;
+			sourceTree = "<group>";
+		};
+		FD5FE48CBD1C3BEEE4EFB9E4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				7254AB2B871A1B97F2920590 /* SuperClean.app */,
+				29D3CC488121C29BA83C4007 /* SuperCleanTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		7FB81244CAED403858B671F4 /* SuperCleanTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 287637D29BEB193A5BBA9D15 /* Build configuration list for PBXNativeTarget "SuperCleanTests" */;
+			buildPhases = (
+				3CF295FD98D9CAD8B0528369 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1D66EEF1BFBF3349282CC110 /* PBXTargetDependency */,
+			);
+			name = SuperCleanTests;
+			packageProductDependencies = (
+			);
+			productName = SuperCleanTests;
+			productReference = 29D3CC488121C29BA83C4007 /* SuperCleanTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		CA3F679C81881198DC6C2E83 /* SuperClean */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 297844E8573FE39AA2389B56 /* Build configuration list for PBXNativeTarget "SuperClean" */;
+			buildPhases = (
+				EE1F4172F0FFD4D3A1FC694E /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SuperClean;
+			packageProductDependencies = (
+			);
+			productName = SuperClean;
+			productReference = 7254AB2B871A1B97F2920590 /* SuperClean.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2D6C6B0A617282E1DF078929 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					7FB81244CAED403858B671F4 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					CA3F679C81881198DC6C2E83 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = F51178739D79FDA372912B98 /* Build configuration list for PBXProject "SuperClean" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 0CF4D289824B09F0EEF31B52;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = FD5FE48CBD1C3BEEE4EFB9E4 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CA3F679C81881198DC6C2E83 /* SuperClean */,
+				7FB81244CAED403858B671F4 /* SuperCleanTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3CF295FD98D9CAD8B0528369 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DFD91F5AFF7AC116889A31F4 /* SafetyGateTests.swift in Sources */,
+				D01167A292C8CE958398919C /* WhitelistStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EE1F4172F0FFD4D3A1FC694E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1902B59F379422440774F07F /* AppState.swift in Sources */,
+				4AC03320BCDA099F90AFA5D3 /* CleanerService.swift in Sources */,
+				90707E07B8DC85C3566EA45A /* ContentView.swift in Sources */,
+				200A27AA392A80D287254DC8 /* CzkawkaBridge.swift in Sources */,
+				F97648AA7B7181844E22B2BC /* MainTabs.swift in Sources */,
+				70C4DF385DEE5A2A7928FEC9 /* MolePaths.swift in Sources */,
+				F308026603A6E172FA0C1251 /* MoreTabs.swift in Sources */,
+				0F73CE903B9A7ECFC562686A /* OperationLog.swift in Sources */,
+				8F4FE9F9D71C0144A4AAD2A0 /* SafetyGate.swift in Sources */,
+				BC2BEE6D247E43D99CF1B9BB /* ScanResult.swift in Sources */,
+				6AA8C43D6CF2E1A51CFB351B /* ScanTab.swift in Sources */,
+				A6BD5C340A5D33379E428E1E /* SharedViews.swift in Sources */,
+				685BD0E58F59EE513F34DE90 /* SuperCleanApp.swift in Sources */,
+				A78CD59B160046854C998583 /* WhitelistStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1D66EEF1BFBF3349282CC110 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CA3F679C81881198DC6C2E83 /* SuperClean */;
+			targetProxy = 2556A97B8054D6F638600510 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		4B3817694AB5EE4EF8E12321 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Resources/SuperClean.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.superclean.SuperClean;
+				PRODUCT_NAME = SuperClean;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		4B610842BEE22E6E6239C4CC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		8CA47F04E9CD00B2A0C29E6B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.superclean.SuperCleanTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SuperClean.app/Contents/MacOS/SuperClean";
+			};
+			name = Release;
+		};
+		BAB064C036E3451CAE2ABB17 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D510AF0EFFE7C1520BC70403 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.superclean.SuperCleanTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SuperClean.app/Contents/MacOS/SuperClean";
+			};
+			name = Debug;
+		};
+		F295DCE524FE2A8FCD3BDCA1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Resources/SuperClean.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.superclean.SuperClean;
+				PRODUCT_NAME = SuperClean;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		287637D29BEB193A5BBA9D15 /* Build configuration list for PBXNativeTarget "SuperCleanTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D510AF0EFFE7C1520BC70403 /* Debug */,
+				8CA47F04E9CD00B2A0C29E6B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		297844E8573FE39AA2389B56 /* Build configuration list for PBXNativeTarget "SuperClean" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F295DCE524FE2A8FCD3BDCA1 /* Debug */,
+				4B3817694AB5EE4EF8E12321 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F51178739D79FDA372912B98 /* Build configuration list for PBXProject "SuperClean" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BAB064C036E3451CAE2ABB17 /* Debug */,
+				4B610842BEE22E6E6239C4CC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 2D6C6B0A617282E1DF078929 /* Project object */;
+}
