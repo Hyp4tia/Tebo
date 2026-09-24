@@ -1,0 +1,40 @@
+[
+  [
+    {
+      "size": 33112,
+      "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/song_a.mp3",
+      "modified_date": 1790275701,
+      "fingerprint": [],
+      "track_title": "Fixtune Alpha",
+      "track_artist": "Fixture Artist",
+      "year": "",
+      "length": 2,
+      "genre": "",
+      "bitrate": 129
+    },
+    {
+      "size": 33112,
+      "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/song_a_copy.mp3",
+      "modified_date": 1790275701,
+      "fingerprint": [],
+      "track_title": "Fixtune Alpha",
+      "track_artist": "Fixture Artist",
+      "year": "",
+      "length": 2,
+      "genre": "",
+      "bitrate": 129
+    },
+    {
+      "size": 33112,
+      "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/song_b.mp3",
+      "modified_date": 1790275701,
+      "fingerprint": [],
+      "track_title": "Fixtune Alpha",
+      "track_artist": "Fixture Artist",
+      "year": "",
+      "length": 2,
+      "genre": "",
+      "bitrate": 129
+    }
+  ]
+]

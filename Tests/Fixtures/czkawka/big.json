@@ -1,0 +1,127 @@
+[
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/song_b.mp3",
+    "size": 33112,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/song_a_copy.mp3",
+    "size": 33112,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/song_a.mp3",
+    "size": 33112,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/photos/sunset.jpg",
+    "size": 23639,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/misc/fake_image.txt",
+    "size": 23639,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/photos/sunset_bright.jpg",
+    "size": 23639,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/pair_a.bin",
+    "size": 16384,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/pair_a_copy.bin",
+    "size": 16384,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/photos/sunset_small.jpg",
+    "size": 15515,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/trio_2.bin",
+    "size": 12288,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/trio_1.bin",
+    "size": 12288,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/trio_3.bin",
+    "size": 12288,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/clip.mp4",
+    "size": 11401,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/clip_copy.mp4",
+    "size": 11401,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/samesize_b.txt",
+    "size": 10000,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/samesize_a.txt",
+    "size": 10000,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/docs/notes.txt",
+    "size": 2000,
+    "modified_date": 1790275700
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/misc/backup.bak",
+    "size": 512,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/misc/notes.tmp",
+    "size": 512,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/misc/editor.save",
+    "size": 512,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/misc/draft.part",
+    "size": 512,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/docs/report.pdf",
+    "size": 469,
+    "modified_date": 1790275700
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/misc/ bad name .JPG",
+    "size": 300,
+    "modified_date": 1790275701
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/docs/broken.pdf",
+    "size": 281,
+    "modified_date": 1790275700
+  },
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/misc/blank.txt",
+    "size": 1,
+    "modified_date": 1790275701
+  }
+]

@@ -1,0 +1,3 @@
+# SuperClean fixture capture 2026-09-24 21:48:22
+# cmd: Engines/czkawka_cli video -d /private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree -p /Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/video.json -N -M -W 
+# (stdout/stderr of the tool follows; empty body = nothing printed thanks to -N -M)

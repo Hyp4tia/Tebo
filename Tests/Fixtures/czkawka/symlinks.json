@@ -1,0 +1,11 @@
+[
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/broken-link",
+    "size": 92,
+    "modified_date": 1790275701,
+    "symlink_info": {
+      "destination_path": "/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T//superclean-fixture-tree/missing-target.txt",
+      "type_of_error": "NonExistentFile"
+    }
+  }
+]

@@ -1,0 +1,22 @@
+[
+  [
+    {
+      "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/photos/sunset.jpg",
+      "size": 23639,
+      "width": 1280,
+      "height": 960,
+      "modified_date": 1790275701,
+      "hashes": [],
+      "difference": 0
+    },
+    {
+      "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/photos/sunset_bright.jpg",
+      "size": 23639,
+      "width": 1280,
+      "height": 960,
+      "modified_date": 1790275701,
+      "hashes": [],
+      "difference": 0
+    }
+  ]
+]

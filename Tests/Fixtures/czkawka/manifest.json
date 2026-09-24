@@ -1,0 +1,116 @@
+{
+  "bad-names": {
+    "exit_code": 0,
+    "json_bytes": 208,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/bad-names.json",
+    "json_parses": true,
+    "log_bytes": 370,
+    "top_level_len": 1,
+    "top_level_type": "list"
+  },
+  "big": {
+    "exit_code": 0,
+    "json_bytes": 4325,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/big.json",
+    "json_parses": true,
+    "log_bytes": 353,
+    "top_level_len": 25,
+    "top_level_type": "list"
+  },
+  "broken": {
+    "exit_code": 0,
+    "json_bytes": 556,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/broken.json",
+    "json_parses": true,
+    "log_bytes": 359,
+    "top_level_len": 2,
+    "top_level_type": "list"
+  },
+  "dup": {
+    "exit_code": 0,
+    "json_bytes": 3199,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/dup.json",
+    "json_parses": true,
+    "log_bytes": 353,
+    "top_level_keys": [
+      "11401",
+      "12288",
+      "16384",
+      "23639",
+      "33112"
+    ],
+    "top_level_type": "dict"
+  },
+  "empty-files": {
+    "exit_code": 0,
+    "json_bytes": 169,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/empty-files.json",
+    "json_parses": true,
+    "log_bytes": 369,
+    "top_level_len": 1,
+    "top_level_type": "list"
+  },
+  "empty-folders": {
+    "exit_code": 0,
+    "json_bytes": 188,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/empty-folders.json",
+    "json_parses": true,
+    "log_bytes": 373,
+    "top_level_len": 2,
+    "top_level_type": "list"
+  },
+  "ext": {
+    "exit_code": 0,
+    "json_bytes": 301,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/ext.json",
+    "json_parses": true,
+    "log_bytes": 353,
+    "top_level_len": 1,
+    "top_level_type": "list"
+  },
+  "image": {
+    "exit_code": 0,
+    "json_bytes": 555,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/image.json",
+    "json_parses": true,
+    "log_bytes": 357,
+    "top_level_len": 1,
+    "top_level_type": "list"
+  },
+  "music": {
+    "exit_code": 0,
+    "json_bytes": 1107,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/music.json",
+    "json_parses": true,
+    "log_bytes": 357,
+    "top_level_len": 1,
+    "top_level_type": "list"
+  },
+  "symlinks": {
+    "exit_code": 0,
+    "json_bytes": 359,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/symlinks.json",
+    "json_parses": true,
+    "log_bytes": 363,
+    "top_level_len": 1,
+    "top_level_type": "list"
+  },
+  "temp": {
+    "exit_code": 0,
+    "json_bytes": 511,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/temp.json",
+    "json_parses": true,
+    "log_bytes": 355,
+    "top_level_len": 3,
+    "top_level_type": "list"
+  },
+  "video": {
+    "exit_code": 0,
+    "json_bytes": 25760,
+    "json_file": "/Users/zeyadhussein/Documents/Projects/Fun Tests/SuperClean/Tests/Fixtures/czkawka/video.json",
+    "json_parses": true,
+    "log_bytes": 357,
+    "top_level_len": 1,
+    "top_level_type": "list"
+  }
+}
