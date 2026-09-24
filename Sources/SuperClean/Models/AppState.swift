@@ -24,8 +24,11 @@ final class AppState {
     /// Detected state of the bundled czkawka engine (presence + hash verification).
     var engine: EngineStatus = .missing
 
-    /// Absolute path to ffmpeg when one is installed. Gates similar videos and video checks.
+    /// Path to ffmpeg when one is installed. Gates similar videos and video checks.
     var ffmpegPath: String?
+
+    /// nil until probed. Full Disk Access is inferred by reading a protected path (PermissionProbe).
+    var hasFullDiskAccess: Bool?
 
     init() {
         // Tiny file read on launch — safe on the main thread.
@@ -38,6 +41,9 @@ final class AppState {
         let status = await Task.detached(priority: .utility) { EngineLocator.locate() }.value
         engine = status
         ffmpegPath = EngineLocator.findFFmpeg()
+        hasFullDiskAccess = await Task.detached(priority: .utility) {
+            PermissionProbe.hasFullDiskAccess()
+        }.value
     }
 
     /// Add protection + persist. Ignores blank entries.

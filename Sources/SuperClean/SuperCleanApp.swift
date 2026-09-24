@@ -8,6 +8,15 @@ struct SuperCleanApp: App {
     // One state object for the whole app (dry-run, whitelist, results).
     @State private var appState = AppState()
 
+    init() {
+        // Headless mode: `SuperClean --selftest` reports what the app can see, then exits.
+        // scripts/verify.sh and the audit harness drive this instead of the GUI.
+        if SelfTest.isRequested {
+            SelfTest.run()
+            exit(0)
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

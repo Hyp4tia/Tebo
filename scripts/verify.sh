@@ -30,13 +30,10 @@ print -r -- "$TEST_OUT" | grep -q "✘" && fail "tests reported failures"
 step "4/4 headless self-test"
 if [[ $QUICK -eq 1 ]]; then
   print -r -- "skipped (--quick)"
-elif swift build -c debug >/dev/null 2>&1; then
+else
   BIN=".build/debug/SuperClean"
-  if [[ -x "$BIN" ]] && "$BIN" --selftest 2>/dev/null; then
-    print -r -- "self-test ok"
-  else
-    print -r -- "self-test not implemented yet (M0 onwards will add it) — not a failure"
-  fi
+  [[ -x "$BIN" ]] || fail "no binary at $BIN"
+  "$BIN" --selftest || fail "self-test exited non-zero"
 fi
 
 print -r -- "\nverify.sh: OK"

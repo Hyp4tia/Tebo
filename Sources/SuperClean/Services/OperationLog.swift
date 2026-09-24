@@ -16,14 +16,23 @@ public actor OperationLog {
     private let logger = Logger(subsystem: "com.superclean.app", category: "operations")
     private let fileURL: URL
 
-    init() {
-        // Resolve ~/Library/Logs/superclean/operations.log lazily and cheaply.
-        let logs = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)
+    /// Log location. Static so Settings and the self-test can show it without touching the actor.
+    public static func fileURL() -> URL {
+        logDirectory().appendingPathComponent("operations.log")
+    }
+
+    private static func logDirectory() -> URL {
+        FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)
             .first?
             .appendingPathComponent("Logs/superclean", isDirectory: true)
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        self.fileURL = logs.appendingPathComponent("operations.log")
-        try? FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+    }
+
+    init() {
+        self.fileURL = Self.fileURL()
+        try? FileManager.default.createDirectory(
+            at: Self.logDirectory(), withIntermediateDirectories: true
+        )
     }
 
     /// Append one line with timestamp. Never throws — logging must not crash scans.
