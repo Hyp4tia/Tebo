@@ -1,7 +1,7 @@
 import SwiftUI
 
-// MARK: - CleanView (Mole `clean` + Krokiet temp/empty)
-// First tab users see. Pure Swift, no Rust needed.
+// MARK: - CleanView (Mole `clean`)
+// First tab users see. Native Swift sweep of the known-safe locations.
 
 struct CleanView: View {
     @Environment(AppState.self) private var appState
@@ -12,65 +12,50 @@ struct CleanView: View {
         ScanTab(
             tabID: "clean",
             title: "Smart Clean",
-            subtitle: "Caches, logs, temp files — Mole clean + Krokiet temp",
+            subtitle: "Caches, logs and leftovers — grouped, biggest first",
             icon: "sparkles",
             runScan: {
-                // Real per-app scan; mock fallback keeps the UI demoable
-                // on machines where the safe locations are empty.
-                let live = await CleanerService().previewSafeLocations(whitelist: whitelist)
-                return live.isEmpty ? CzkawkaBridge.mockResults(for: "clean") : live
+                return await CleanerService().previewSafeLocations(whitelist: whitelist)
             }
         )
     }
 }
 
 // MARK: - DuplicatesView (Krokiet duplicates + similar media)
-// Uses Rust engine in M3. Mock data in M1 so UI works today.
 
 struct DuplicatesView: View {
     var body: some View {
-        ScanTab(
-            tabID: "duplicates",
+        UnavailableTab(
             title: "Duplicates",
-            subtitle: "Exact duplicates by hash — similar images/music/video in M3",
+            subtitle: "Exact duplicates by hash, plus similar images, music and video",
             icon: "doc.on.doc",
-            runScan: {
-                // M3: replace with CzkawkaBridge(engineURL: bundled).scanDuplicates()
-                CzkawkaBridge.mockResults(for: "duplicates")
-            }
+            reason: "This tab runs the bundled czkawka engine. Its output reader is still being wired up, so the tab stays empty for now instead of showing invented rows."
         )
     }
 }
 
 // MARK: - AppsView (Mole `uninstall`)
-// Lists /Applications + leftovers. M1 = mock, M2 = real inventory.
 
 struct AppsView: View {
     var body: some View {
-        ScanTab(
-            tabID: "apps",
+        UnavailableTab(
             title: "Apps",
-            subtitle: "Uninstall apps + LaunchAgents, prefs, leftovers",
+            subtitle: "Uninstall an app together with its preferences, containers and launch agents",
             icon: "app.badge",
-            runScan: {
-                CzkawkaBridge.mockResults(for: "apps")
-            }
+            reason: "The uninstall planner is not implemented yet. When it lands it will list every file it intends to remove, and keep data that another installed app still uses."
         )
     }
 }
 
-// MARK: - DiskView (Mole `analyze` + Krokiet big files)
+// MARK: - DiskView (Mole `analyze`)
 
 struct DiskView: View {
     var body: some View {
-        ScanTab(
-            tabID: "disk",
+        UnavailableTab(
             title: "Disk",
-            subtitle: "Big files + disk explorer — largest first",
+            subtitle: "Where the space went, largest first",
             icon: "internaldrive",
-            runScan: {
-                CzkawkaBridge.mockResults(for: "disk")
-            }
+            reason: "The disk explorer is not implemented yet. Until then Finder shows the same information without guessing."
         )
     }
 }

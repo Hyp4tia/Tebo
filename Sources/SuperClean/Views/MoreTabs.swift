@@ -89,8 +89,7 @@ struct ToolboxView: View {
                     subtitle: "Rebuildable project folders: node_modules, target, dist",
                     icon: "hammer",
                     runScan: {
-                        let live = await CleanerService().findProjectArtifacts(whitelist: whitelist)
-                        return live.isEmpty ? CzkawkaBridge.mockResults(for: "purge") : live
+                        return await CleanerService().findProjectArtifacts(whitelist: whitelist)
                     }
                 )
             case .installers:
@@ -100,17 +99,15 @@ struct ToolboxView: View {
                     subtitle: "DMG, PKG, ISO, XIP left in Downloads",
                     icon: "archivebox",
                     runScan: {
-                        let live = await CleanerService().findInstallers(whitelist: whitelist)
-                        return live.isEmpty ? CzkawkaBridge.mockResults(for: "installer") : live
+                        return await CleanerService().findInstallers(whitelist: whitelist)
                     }
                 )
             case .fixers:
-                ScanTab(
-                    tabID: "toolbox",
+                UnavailableTab(
                     title: "Fixers",
                     subtitle: "Broken files, bad extensions, symlinks, Exif, bad names",
                     icon: "wrench.and.screwdriver",
-                    runScan: { CzkawkaBridge.mockResults(for: "toolbox") }
+                    reason: "These checks run the bundled czkawka engine, whose output readers are still being wired up."
                 )
             case .history:
                 // History sub-view (like `mo history`)

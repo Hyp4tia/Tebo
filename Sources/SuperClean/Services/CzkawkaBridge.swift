@@ -54,31 +54,7 @@ public struct CzkawkaBridge: Sendable {
         }
     }
 
-    // MARK: Mock data (M1 UI shell)
-
-    /// Fake results so all 6 tabs work without the Rust binary.
-    /// Delete this when live engines land.
-    public static func mockResults(for tab: String) -> [ScanResult] {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        switch tab {
-        case "clean":
-            return [
-                ScanResult(path: "\(home)/Library/Caches/Chrome", sizeBytes: 1_200_000_000, category: "User app cache", reason: "Rebuildable cache"),
-                ScanResult(path: "\(home)/Library/Logs", sizeBytes: 12_800_000, category: "User app logs", reason: "Rotating logs")
-            ]
-        case "duplicates":
-            return [
-                ScanResult(path: "\(home)/Downloads/photo-copy.jpg", sizeBytes: 4_200_000, category: "Duplicates", reason: "Same hash as original"),
-                ScanResult(path: "\(home)/Pictures/IMG_01-dupe.png", sizeBytes: 8_600_000, category: "Duplicates", reason: "Same hash as original")
-            ]
-        case "disk":
-            return [
-                ScanResult(path: "\(home)/Downloads/old-backup.zip", sizeBytes: 8_796_093_022, category: "Big Files", reason: "Largest files on disk")
-            ]
-        default:
-            return [
-                ScanResult(path: "\(home)/Library/Caches/example.tmp", sizeBytes: 48_000_000, category: tab.capitalized, reason: "Preview only — dry-run")
-            ]
-        }
-    }
+    // MARK: Live scan
+    // Results arrive as one JSON document written to a temp file (see CzkawkaProcess), never on
+    // stdout: czkawka_cli has no stdout JSON mode. The parsers live in Services/CzkawkaJSON.
 }
