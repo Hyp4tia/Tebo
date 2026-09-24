@@ -1,0 +1,44 @@
+{
+  "other.txt": [
+    {
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/extras/subA/other.txt",
+      "modified_date": 1790276174,
+      "size": 12288,
+      "hash": ""
+    },
+    {
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/extras/subB/other.txt",
+      "modified_date": 1790276174,
+      "size": 12288,
+      "hash": ""
+    }
+  ],
+  "report.txt": [
+    {
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/extras/subA/report.txt",
+      "modified_date": 1790276174,
+      "size": 10240,
+      "hash": ""
+    },
+    {
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/extras/subB/report.txt",
+      "modified_date": 1790276174,
+      "size": 10240,
+      "hash": ""
+    }
+  ],
+  "small.bin": [
+    {
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/extras/subA/small.bin",
+      "modified_date": 1790276174,
+      "size": 9216,
+      "hash": ""
+    },
+    {
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/extras/subB/small.bin",
+      "modified_date": 1790276174,
+      "size": 10240,
+      "hash": ""
+    }
+  ]
+}

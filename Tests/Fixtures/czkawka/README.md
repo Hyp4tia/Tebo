@@ -8,8 +8,11 @@ captures, not against guessed schemas.
 Regenerate with:
 
 ```sh
-./scripts/capture-fixtures.sh   # rebuilds the tree in $TMPDIR, re-runs all 12 tools
+./scripts/capture-czkawka-fixtures.sh   # rebuilds the tree in $TMPDIR, re-runs all tools
 ```
+
+That script delegates the 12-tool capture below to `scripts/capture-fixtures.sh`, then
+adds the three dup search-method variants documented at the bottom of this file.
 
 ## Global facts (true for every capture below)
 
@@ -338,6 +341,53 @@ Top-level: **array of groups**; each group is an array of entries:
 runtime** for this tool. `signature.visual_hashes[].bits` is a flat array of up to
 64x64 = 4096 small ints (truncated in the snippet above). Default
 `--minimal-file-size` is 8192 — the 11 KB clip qualifies.
+
+## dup search-method variants (captured live, not derived from source)
+
+The main `dup.json` uses the default HASH method. The other three `-s` methods change
+the JSON shape; all three below were captured against the real binary with a few
+same-name files added under `extras/` (see `scripts/capture-czkawka-fixtures.sh`).
+In SIZE/NAME/SIZE_NAME modes the engine never hashes: every entry's `hash` is `""`.
+
+### dup-size.json — `dup -s SIZE`
+
+Object keyed by size string; each value is ONE FLAT array of entries
+(`{path, modified_date, size, hash:""}`). Same-size-different-content pairs group here
+(entries 10000: `samesize_a.txt` + `samesize_b.txt`).
+
+```json
+{
+  "10000": [
+    { "path": ".../dup/samesize_a.txt", "modified_date": 1790276109, "size": 10000, "hash": "" },
+    { "path": ".../dup/samesize_b.txt", "modified_date": 1790276109, "size": 10000, "hash": "" }
+  ]
+}
+```
+
+### dup-name.json — `dup -s NAME`
+
+Object keyed by FILE NAME string; each value is one flat entry array. Same name,
+different sizes still group (the `small.bin` key holds a 9216-byte and a 10240-byte
+file). With no same-name files the output is `{}` (2 bytes).
+
+### dup-size-name.json — `dup -s SIZE_NAME`
+
+**Bare array of groups, no keys at all.** The map's (size, name) tuple keys are dropped
+by the serializer, so Swift rebuilds a stable group ID from the first entry
+(`size_name:<size>:<filename>`). Empty result is `[]`.
+
+```json
+[
+  [
+    { "path": ".../extras/subA/report.txt", "modified_date": 1790276174, "size": 10240, "hash": "" },
+    { "path": ".../extras/subB/report.txt", "modified_date": 1790276174, "size": 10240, "hash": "" }
+  ],
+  [
+    { "path": ".../extras/subA/other.txt", "modified_date": 1790276174, "size": 12288, "hash": "" },
+    { "path": ".../extras/subB/other.txt", "modified_date": 1790276174, "size": 12288, "hash": "" }
+  ]
+]
+```
 
 ## Regeneration caveats
 
