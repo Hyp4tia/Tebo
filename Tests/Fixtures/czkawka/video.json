@@ -1,11 +1,11 @@
 [
   [
     {
-      "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/clip.mp4",
+      "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/media/clip.mp4",
       "size": 11401,
       "modified_date": 1790275701,
       "signature": {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/clip.mp4",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/media/clip.mp4",
         "duration_ms": 2000,
         "aspect_ratio": 1.3333334,
         "visual_hashes": [
@@ -699,11 +699,11 @@
       "duration": 2.0
     },
     {
-      "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/clip_copy.mp4",
+      "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/media/clip_copy.mp4",
       "size": 11401,
       "modified_date": 1790275701,
       "signature": {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/clip_copy.mp4",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/media/clip_copy.mp4",
         "duration_ms": 2000,
         "aspect_ratio": 1.3333334,
         "visual_hashes": [

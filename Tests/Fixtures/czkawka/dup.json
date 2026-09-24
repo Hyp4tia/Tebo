@@ -2,13 +2,13 @@
   "11401": [
     [
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/clip.mp4",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/media/clip.mp4",
         "modified_date": 1790275701,
         "size": 11401,
         "hash": "0b2eadda2b1900fd11afeef6c368a5635d58ef5c0c2af09f4d3a6a74c0b2d167"
       },
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/clip_copy.mp4",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/media/clip_copy.mp4",
         "modified_date": 1790275701,
         "size": 11401,
         "hash": "0b2eadda2b1900fd11afeef6c368a5635d58ef5c0c2af09f4d3a6a74c0b2d167"
@@ -18,19 +18,19 @@
   "12288": [
     [
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/trio_1.bin",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/dup/trio_1.bin",
         "modified_date": 1790275701,
         "size": 12288,
         "hash": "8e6d1b2e82ec6e5972ee87321dda360a151b7bf5563f04149b4645ee0c862224"
       },
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/trio_2.bin",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/dup/trio_2.bin",
         "modified_date": 1790275701,
         "size": 12288,
         "hash": "8e6d1b2e82ec6e5972ee87321dda360a151b7bf5563f04149b4645ee0c862224"
       },
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/trio_3.bin",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/dup/trio_3.bin",
         "modified_date": 1790275701,
         "size": 12288,
         "hash": "8e6d1b2e82ec6e5972ee87321dda360a151b7bf5563f04149b4645ee0c862224"
@@ -40,13 +40,13 @@
   "16384": [
     [
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/pair_a.bin",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/dup/pair_a.bin",
         "modified_date": 1790275701,
         "size": 16384,
         "hash": "3a3f6bf0940552a5170db5a8611c13a9ac34139e78e1fd2bf934e66741e96316"
       },
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/dup/pair_a_copy.bin",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/dup/pair_a_copy.bin",
         "modified_date": 1790275701,
         "size": 16384,
         "hash": "3a3f6bf0940552a5170db5a8611c13a9ac34139e78e1fd2bf934e66741e96316"
@@ -56,13 +56,13 @@
   "23639": [
     [
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/misc/fake_image.txt",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/misc/fake_image.txt",
         "modified_date": 1790275701,
         "size": 23639,
         "hash": "9ee2167b86a445b180e971978868d293ece63317f099d33031e0ba9d6d93dcd6"
       },
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/photos/sunset.jpg",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/photos/sunset.jpg",
         "modified_date": 1790275701,
         "size": 23639,
         "hash": "9ee2167b86a445b180e971978868d293ece63317f099d33031e0ba9d6d93dcd6"
@@ -72,13 +72,13 @@
   "33112": [
     [
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/song_a.mp3",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/media/song_a.mp3",
         "modified_date": 1790275701,
         "size": 33112,
         "hash": "ebe7c24b7373ea8b3373217cb65dd8472fc0dc59077c2f6b78859c799d5e370a"
       },
       {
-        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/superclean-fixture-tree/media/song_a_copy.mp3",
+        "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-fixture-tree/media/song_a_copy.mp3",
         "modified_date": 1790275701,
         "size": 33112,
         "hash": "ebe7c24b7373ea8b3373217cb65dd8472fc0dc59077c2f6b78859c799d5e370a"

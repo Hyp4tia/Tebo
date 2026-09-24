@@ -1,5 +1,5 @@
 #!/bin/zsh
-# make-icon.sh — builds Resources/SuperClean.icns from scripts/make-icon.swift.
+# make-icon.sh — builds Resources/Tebo.icns from scripts/make-icon.swift.
 #
 # Usage: ./scripts/make-icon.sh
 # Swap the mark by editing the symbol list / gradient in make-icon.swift, then re-run this.
@@ -14,7 +14,7 @@ trap 'rm -rf "$WORK"' EXIT
 BASE="$WORK/icon-1024.png"
 swift scripts/make-icon.swift "$BASE"
 
-ICONSET="$WORK/SuperClean.iconset"
+ICONSET="$WORK/Tebo.iconset"
 mkdir -p "$ICONSET"
 
 # Every size macOS asks for, in @1x and @2x flavours.
@@ -36,6 +36,6 @@ for pair in "${PAIRS[@]}"; do
   sips -s format png -z "$SIZE" "$SIZE" "$BASE" --out "$ICONSET/$NAME" >/dev/null
 done
 
-iconutil -c icns "$ICONSET" -o Resources/SuperClean.icns
-print -r -- "wrote Resources/SuperClean.icns"
-sips -g pixelWidth -g pixelHeight Resources/SuperClean.icns 2>/dev/null | tail -2
+iconutil -c icns "$ICONSET" -o Resources/Tebo.icns
+print -r -- "wrote Resources/Tebo.icns"
+sips -g pixelWidth -g pixelHeight Resources/Tebo.icns 2>/dev/null | tail -2

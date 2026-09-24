@@ -1,7 +1,7 @@
 #!/bin/bash
 # build-fixture-tree.sh — build a deterministic fixture tree for czkawka tool captures.
 # Usage: ./scripts/build-fixture-tree.sh [output-dir]
-# Default output dir: ${TMPDIR:-/tmp}/superclean-fixture-tree  (recreated on every run)
+# Default output dir: ${TMPDIR:-/tmp}/tebo-fixture-tree  (recreated on every run)
 # Prints "FIXTURE_TREE=<dir>" as its final line so callers can parse the path.
 #
 # The tree exercises every czkawka tool we ship:
@@ -24,10 +24,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-TREE="${1:-${TMPDIR:-/tmp}/superclean-fixture-tree}"
+TREE="${1:-${TMPDIR:-/tmp}/tebo-fixture-tree}"
 case "$TREE" in
-  */superclean-fixture-tree) ;;
-  *) echo "build-fixture-tree: refusing path that is not a superclean-fixture-tree dir: $TREE" >&2; exit 2 ;;
+  */tebo-fixture-tree) ;;
+  *) echo "build-fixture-tree: refusing path that is not a tebo-fixture-tree dir: $TREE" >&2; exit 2 ;;
 esac
 
 # Clean/recreate ONLY our own fixture dir. find -delete handles the symlink safely.
@@ -71,7 +71,7 @@ def build():
     add(1, b"<< /Type /Catalog /Pages 2 0 R >>")
     add(2, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
     add(3, b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>")
-    stream = b"BT /F1 24 Tf 100 700 Td (SuperClean fixture PDF) Tj ET"
+    stream = b"BT /F1 24 Tf 100 700 Td (Tebo fixture PDF) Tj ET"
     add(4, b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream")
     out = bytearray(b"%PDF-1.4\n")
     offsets = {}
@@ -92,7 +92,7 @@ print("wrote", sys.argv[1])
 PYEOF
 pdf_size="$(stat -f%z "$TREE/docs/report.pdf")"
 head -c $((pdf_size * 3 / 5)) "$TREE/docs/report.pdf" > "$TREE/docs/broken.pdf"   # truncated -> unparseable
-make_pattern "$TREE/docs/notes.txt" 2000 "SuperClean docs notes line"
+make_pattern "$TREE/docs/notes.txt" 2000 "Tebo docs notes line"
 
 # --- photos: same image at two sizes + brightness variant --------------------------
 # NOTE: czkawka image tool default minimal-file-size is 16384 bytes (checked in
@@ -111,9 +111,9 @@ ffmpeg -hide_banner -loglevel error -y -i "$TREE/photos/sunset.jpg" -vf "scale=9
 ffmpeg -hide_banner -loglevel error -y -i "$TREE/photos/sunset.jpg" -vf "eq=brightness=0.1" "$TREE/photos/sunset_bright.jpg" || die "ffmpeg brighten"
 
 # --- dup: exact pairs and trios (all > 8KB), same-size-different-content -----------
-make_pattern "$TREE/dup/pair_a.bin"      16384 "SuperClean pair A duplicate payload line 0123456789"
+make_pattern "$TREE/dup/pair_a.bin"      16384 "Tebo pair A duplicate payload line 0123456789"
 cp "$TREE/dup/pair_a.bin" "$TREE/dup/pair_a_copy.bin"
-make_pattern "$TREE/dup/trio_1.bin"      12288 "SuperClean trio payload line 9876543210"
+make_pattern "$TREE/dup/trio_1.bin"      12288 "Tebo trio payload line 9876543210"
 cp "$TREE/dup/trio_1.bin" "$TREE/dup/trio_2.bin"
 cp "$TREE/dup/trio_1.bin" "$TREE/dup/trio_3.bin"
 make_pattern "$TREE/dup/samesize_a.txt"  10000 "AAAAAA alpha content that differs from B"
@@ -122,13 +122,13 @@ make_pattern "$TREE/dup/samesize_b.txt"  10000 "BBBBBB beta content that differs
 # --- misc: empty file, 1-byte control, temp files, bad-extension files, bad name ---
 : > "$TREE/misc/empty.dat"                       # 0 bytes
 printf '\n' > "$TREE/misc/blank.txt"             # 1 byte (not zero-byte-empty)
-make_pattern "$TREE/misc/notes.tmp"   512 "SuperClean temp file"
-make_pattern "$TREE/misc/backup.bak"  512 "SuperClean backup file"
-make_pattern "$TREE/misc/draft.part"  512 "SuperClean partial download"
-make_pattern "$TREE/misc/editor.save" 512 "SuperClean editor buffer"
+make_pattern "$TREE/misc/notes.tmp"   512 "Tebo temp file"
+make_pattern "$TREE/misc/backup.bak"  512 "Tebo backup file"
+make_pattern "$TREE/misc/draft.part"  512 "Tebo partial download"
+make_pattern "$TREE/misc/editor.save" 512 "Tebo editor buffer"
 
 cp "$TREE/photos/sunset.jpg" "$TREE/misc/fake_image.txt"   # JPEG bytes, .txt extension
-make_pattern "$TREE/misc/ bad name .JPG" 300 "SuperClean text bytes wearing a JPG extension"   # spaces + uppercase ext
+make_pattern "$TREE/misc/ bad name .JPG" 300 "Tebo text bytes wearing a JPG extension"   # spaces + uppercase ext
 
 # --- symlink: broken link -----------------------------------------------------------
 ln -s "$TREE/missing-target.txt" "$TREE/broken-link"

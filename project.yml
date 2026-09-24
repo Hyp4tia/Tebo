@@ -1,11 +1,11 @@
-# project.yml — generates SuperClean.xcodeproj via `xcodegen generate`
+# project.yml — generates Tebo.xcodeproj via `xcodegen generate`
 # Why: Swift Packages can't Cmd+R as a real .app (no bundle ID → linkd errors).
-# A real Xcode project gives you Cmd+R = build SuperClean.app + launch window.
-# Usage: xcodegen generate  →  open SuperClean.xcodeproj
+# A real Xcode project gives you Cmd+R = build Tebo.app + launch window.
+# Usage: xcodegen generate  →  open Tebo.xcodeproj
 
-name: SuperClean
+name: Tebo
 options:
-  bundleIdPrefix: com.superclean
+  bundleIdPrefix: com.tebo
   deploymentTarget:
     macOS: "14.0"
   xcodeVersion: "16.0"
@@ -22,12 +22,12 @@ settings:
   ENABLE_HARDENED_RUNTIME: YES
 
 targets:
-  SuperClean:
+  Tebo:
     type: application
     platform: macOS
     sources:
-      - path: Sources/SuperClean
-      - path: Resources/SuperClean.icns
+      - path: Sources/Tebo
+      - path: Resources/Tebo.icns
         buildPhase: resources
       - path: Resources/NOTICE.md
         buildPhase: resources
@@ -38,16 +38,16 @@ targets:
       # overwrote hand-written keys (icon, category, copyright) once already.
       - path: Resources/Info.plist
         buildPhase: none
-      - path: Resources/SuperClean.entitlements
+      - path: Resources/Tebo.entitlements
         buildPhase: none
     settings:
-      PRODUCT_NAME: SuperClean
+      PRODUCT_NAME: Tebo
       # Set explicitly instead of relying on xcodegen's `bundleId` key (which this version ignores)
-      # or the bundleIdPrefix default (com.superclean.SuperClean). Must match the Logger subsystem
+      # or the bundleIdPrefix default (com.tebo.Tebo). Must match the Logger subsystem
       # in OperationLog and scripts/release.sh.
-      PRODUCT_BUNDLE_IDENTIFIER: com.superclean.app
+      PRODUCT_BUNDLE_IDENTIFIER: com.tebo.app
       INFOPLIST_FILE: Resources/Info.plist
-      CODE_SIGN_ENTITLEMENTS: Resources/SuperClean.entitlements
+      CODE_SIGN_ENTITLEMENTS: Resources/Tebo.entitlements
       COMBINE_HIDPI_IMAGES: YES
     postBuildScripts:
       # The czkawka engine ships next to the app executable and is signed with the same identity:
@@ -70,11 +70,11 @@ targets:
             --sign "$SIGN_IDENTITY" "$DEST_DIR/czkawka_cli"
           echo "bundled czkawka_cli signed as $SIGN_IDENTITY"
 
-  SuperCleanTests:
+  TeboTests:
     type: bundle.unit-test
     platform: macOS
-    bundleId: com.superclean.app.tests
+    bundleId: com.tebo.app.tests
     sources:
-      - path: Tests/SuperCleanTests
+      - path: Tests/TeboTests
     dependencies:
-      - target: SuperClean
+      - target: Tebo

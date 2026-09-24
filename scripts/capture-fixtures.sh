@@ -12,7 +12,7 @@
 #   Tests/Fixtures/czkawka/manifest.json exit code + output sizes for every tool
 #
 # Invariant: every run passes  -d <tree> -p <json> -N -M -W  and NEVER -D or -y
-# (those make the scan destructive — SuperClean only finds, never deletes).
+# (those make the scan destructive — Tebo only finds, never deletes).
 #
 # bad-names is the one tool that needs check flags: with none of -u -j -w -n -a
 # passed, it checks nothing and always returns [] (verified against 12.0.2).
@@ -52,7 +52,7 @@ for i in "${!TOOLS[@]}"; do
   rm -f "$json"
 
   {
-    echo "# SuperClean fixture capture $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "# Tebo fixture capture $(date '+%Y-%m-%d %H:%M:%S')"
     echo "# cmd: $ENGINE $name -d $TREE -p $json -N -M -W $extra"
     echo "# (stdout/stderr of the tool follows; empty body = nothing printed thanks to -N -M)"
   } > "$log"

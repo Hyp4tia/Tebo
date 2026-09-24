@@ -1,4 +1,4 @@
-# SuperClean audit
+# Tebo audit
 
 Measured facts only. Every number below comes from a command that can be re-run; anything not yet
 measured says so instead of guessing.
@@ -10,7 +10,7 @@ Last updated: 2026-09-24 (M6: memory, process surface, network, signing audited)
 ```sh
 ./scripts/verify.sh                    # build + unit tests + headless self-test
 swift test --filter ScanMemoryTests    # memory guard (prints its own numbers)
-swift run -c release SuperClean --benchmark=30   # footprint across 30 scans + one real home pass
+swift run -c release Tebo --benchmark=30   # footprint across 30 scans + one real home pass
 ./scripts/release.sh                   # build, verify and sign the shipping DMG
 ```
 
@@ -72,7 +72,7 @@ networking code exists in the app, and the engine is invoked only with local sca
 
 ## Entitlements and signing
 
-- `Resources/SuperClean.entitlements` holds an empty dictionary: the app requests nothing.
+- `Resources/Tebo.entitlements` holds an empty dictionary: the app requests nothing.
 - Not sandboxed, so the checks that matter are no-network (above) and the delete path (below).
 - Hardened runtime verified: `flags=0x10000(runtime)` on both Debug and Release builds.
 - **Found and fixed while writing this audit:** Xcode injects `get-task-allow` (a debug entitlement

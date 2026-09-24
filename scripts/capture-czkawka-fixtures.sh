@@ -20,7 +20,7 @@
 #
 # Invariant, same as capture-fixtures.sh: every run passes
 #   <tool> -d <tree> -p <json> -N -M -W   and NEVER -D or -y
-# (those flags make a scan destructive — SuperClean only finds, never deletes).
+# (those flags make a scan destructive — Tebo only finds, never deletes).
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -60,14 +60,14 @@ def make(path, size, seed):
             f.write(chunk)
             size -= len(chunk)
 # Same name + same size (SIZE_NAME group; also a NAME group).
-make(f"{tree}/extras/subA/report.txt", 10240, "SuperClean NAME method same-name payload AAAA 0123456789")
-make(f"{tree}/extras/subB/report.txt", 10240, "SuperClean NAME method same-name payload AAAA 0123456789")
+make(f"{tree}/extras/subA/report.txt", 10240, "Tebo NAME method same-name payload AAAA 0123456789")
+make(f"{tree}/extras/subB/report.txt", 10240, "Tebo NAME method same-name payload AAAA 0123456789")
 # Same name + same size, different content (NAME group; SIZE_NAME group by size+name).
-make(f"{tree}/extras/subA/other.txt", 12288, "SuperClean NAME diff content CCCC 5555555555")
-make(f"{tree}/extras/subB/other.txt", 12288, "SuperClean NAME diff content DDDD 6666666666")
+make(f"{tree}/extras/subA/other.txt", 12288, "Tebo NAME diff content CCCC 5555555555")
+make(f"{tree}/extras/subB/other.txt", 12288, "Tebo NAME diff content DDDD 6666666666")
 # Same name, DIFFERENT sizes (NAME group only — proves NAME ignores size).
-make(f"{tree}/extras/subA/small.bin", 9216, "SuperClean NAME smaller size XXXX")
-make(f"{tree}/extras/subB/small.bin", 10240, "SuperClean NAME bigger size YYYY 99")
+make(f"{tree}/extras/subA/small.bin", 9216, "Tebo NAME smaller size XXXX")
+make(f"{tree}/extras/subB/small.bin", 10240, "Tebo NAME bigger size YYYY 99")
 print("extras written")
 PYEOF
 
@@ -84,7 +84,7 @@ for variant in size name size-name; do
   log="$OUT_ABS/dup-$variant.log"
   rm -f "$json"
   {
-    echo "# SuperClean fixture capture $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "# Tebo fixture capture $(date '+%Y-%m-%d %H:%M:%S')"
     echo "# cmd: $ENGINE dup -d $TREE -s $method -p $OUT_DIR/dup-$variant.json -N -M -W"
     echo "# (stdout/stderr of the tool follows; empty body = nothing printed thanks to -N -M)"
   } > "$log"

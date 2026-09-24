@@ -1,4 +1,4 @@
-// make-icon.swift — draws the SuperClean app icon at 1024 px.
+// make-icon.swift — draws the Tebo app icon at 1024 px.
 //
 // WHY a generator instead of a committed PNG: macOS asks for many sizes, and adjusting the mark
 // should be a one-line change here plus a re-run of scripts/make-icon.sh. Drawing is done with
@@ -6,7 +6,7 @@
 // rather than pulled from SF Symbols (whose set varies by macOS version).
 //
 // Usage: swift make-icon.swift <output.png>
-//        (scripts/make-icon.sh slices it into every size and builds SuperClean.icns)
+//        (scripts/make-icon.sh slices it into every size and builds Tebo.icns)
 
 import AppKit
 

@@ -14,6 +14,11 @@ Regenerate with:
 That script delegates the 12-tool capture below to `scripts/capture-fixtures.sh`, then
 adds the three dup search-method variants documented at the bottom of this file.
 
+Captured 2026-09-24, when the app and its fixture tree were named Tebo (`ⲧⲉⲃⲟ`). The
+absolute paths inside the captures carry the capture machine's temp directory and repo
+path, which is why they read like a developer's machine: they are the command lines that
+actually produced these files.
+
 ## Global facts (true for every capture below)
 
 - **JSON goes to the file given by `-p`, never to stdout.** One JSON document per run.
@@ -394,7 +399,7 @@ by the serializer, so Swift rebuilds a stable group ID from the first entry
 - Rebuilding the tree changes file sizes/timestamps slightly (ffmpeg encodes are
   content-dependent); shapes, group structure and field sets are stable. Re-capture and
   commit both `.json` and `.log` files together.
-- The tree lives in `$TMPDIR/superclean-fixture-tree` (never committed).
+- The tree lives in `$TMPDIR/tebo-fixture-tree` (never committed).
 - czkawka keeps a cache under
   `~/Library/Application Support/pl.Qarmin.Czkawka/cache/` — harmless, and results did
   not differ between cached and `-H` (no-cache) runs in testing.

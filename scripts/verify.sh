@@ -1,7 +1,7 @@
 #!/bin/zsh
 # verify.sh — one command that proves the tree is healthy. Runs headless, exits non-zero on failure.
 # Usage: ./scripts/verify.sh [--quick]     (--quick skips the headless app self-test)
-# Every milestone in .hermes/plans/2026-09-24_superclean-v1.0-launch.md ends with this script.
+# Every milestone in .hermes/plans/2026-09-24_tebo-v1.0-launch.md ends with this script.
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -31,7 +31,7 @@ step "4/4 headless self-test"
 if [[ $QUICK -eq 1 ]]; then
   print -r -- "skipped (--quick)"
 else
-  BIN=".build/debug/SuperClean"
+  BIN=".build/debug/Tebo"
   [[ -x "$BIN" ]] || fail "no binary at $BIN"
   "$BIN" --selftest || fail "self-test exited non-zero"
 fi

@@ -1,6 +1,6 @@
-# SuperClean default whitelist (one substring per line).
+# Tebo default whitelist (one substring per line).
 # Anything containing these strings is NEVER deleted.
-# Copy to ~/.config/superclean/whitelist to customize (M2).
+# Copy to ~/.config/tebo/whitelist to customize (M2).
 
 ~/Library/Caches/com.apple.Safari
 ~/Library/Application Support/MobileSync

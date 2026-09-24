@@ -1,13 +1,13 @@
 {
   "10000": [
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/dup/samesize_a.txt",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/dup/samesize_a.txt",
       "modified_date": 1790276109,
       "size": 10000,
       "hash": ""
     },
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/dup/samesize_b.txt",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/dup/samesize_b.txt",
       "modified_date": 1790276109,
       "size": 10000,
       "hash": ""
@@ -15,13 +15,13 @@
   ],
   "11401": [
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/media/clip.mp4",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/media/clip.mp4",
       "modified_date": 1790276109,
       "size": 11401,
       "hash": ""
     },
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/media/clip_copy.mp4",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/media/clip_copy.mp4",
       "modified_date": 1790276109,
       "size": 11401,
       "hash": ""
@@ -29,19 +29,19 @@
   ],
   "12288": [
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/dup/trio_1.bin",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/dup/trio_1.bin",
       "modified_date": 1790276109,
       "size": 12288,
       "hash": ""
     },
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/dup/trio_2.bin",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/dup/trio_2.bin",
       "modified_date": 1790276109,
       "size": 12288,
       "hash": ""
     },
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/dup/trio_3.bin",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/dup/trio_3.bin",
       "modified_date": 1790276109,
       "size": 12288,
       "hash": ""
@@ -49,13 +49,13 @@
   ],
   "16384": [
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/dup/pair_a.bin",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/dup/pair_a.bin",
       "modified_date": 1790276109,
       "size": 16384,
       "hash": ""
     },
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/dup/pair_a_copy.bin",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/dup/pair_a_copy.bin",
       "modified_date": 1790276109,
       "size": 16384,
       "hash": ""
@@ -63,19 +63,19 @@
   ],
   "27360": [
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/misc/fake_image.txt",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/misc/fake_image.txt",
       "modified_date": 1790276109,
       "size": 27360,
       "hash": ""
     },
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/photos/sunset.jpg",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/photos/sunset.jpg",
       "modified_date": 1790276108,
       "size": 27360,
       "hash": ""
     },
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/photos/sunset_bright.jpg",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/photos/sunset_bright.jpg",
       "modified_date": 1790276109,
       "size": 27360,
       "hash": ""
@@ -83,19 +83,19 @@
   ],
   "33112": [
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/media/song_a.mp3",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/media/song_a.mp3",
       "modified_date": 1790276109,
       "size": 33112,
       "hash": ""
     },
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/media/song_a_copy.mp3",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/media/song_a_copy.mp3",
       "modified_date": 1790276109,
       "size": 33112,
       "hash": ""
     },
     {
-      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/superclean-fixture-tree/media/song_b.mp3",
+      "path": "/Users/zeyadhussein/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/media/song_b.mp3",
       "modified_date": 1790276109,
       "size": 33112,
       "hash": ""

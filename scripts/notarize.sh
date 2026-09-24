@@ -1,5 +1,5 @@
 #!/bin/bash
-# notarize.sh — submit a SuperClean DMG to Apple and staple the ticket.
+# notarize.sh — submit a Tebo DMG to Apple and staple the ticket.
 #
 # This is the step that removes the "right-click to open" workaround. It needs
 # two things this repo cannot generate for you:
@@ -9,13 +9,13 @@
 #      Settings -> Accounts -> Manage Certificates -> + -> Developer ID Application
 #
 #   2. A stored notarytool credential profile (created once, interactive):
-#        xcrun notarytool store-credentials "superclean-notary" \
+#        xcrun notarytool store-credentials "tebo-notary" \
 #          --apple-id "you@example.com" \
 #          --team-id "YOURTEAMID" \
 #          --password "app-specific-password"
 #
-# Usage:  ./scripts/notarize.sh [path/to/SuperClean-1.0.dmg]
-# Env:    NOTARY_PROFILE   credential profile name (default: superclean-notary)
+# Usage:  ./scripts/notarize.sh [path/to/Tebo-1.0.dmg]
+# Env:    NOTARY_PROFILE   credential profile name (default: tebo-notary)
 #         SIGN_IDENTITY   Developer ID identity, if the DMG was not signed with it
 #
 # Order of operations matters: the DMG must already be signed with the
@@ -25,7 +25,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PROFILE="${NOTARY_PROFILE:-superclean-notary}"
+PROFILE="${NOTARY_PROFILE:-tebo-notary}"
 DMG="${1:-}"
 
 die() { echo "NOTARIZE ERROR: $1" >&2; exit 1; }

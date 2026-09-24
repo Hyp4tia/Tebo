@@ -1,5 +1,5 @@
 #!/bin/bash
-# release.sh — build, sign, and package SuperClean as a distributable DMG.
+# release.sh — build, sign, and package Tebo as a distributable DMG.
 #
 # Usage:  ./scripts/release.sh [--unsigned]
 #   --unsigned   skip code signing entirely (build-and-package smoke test only)
@@ -8,7 +8,7 @@
 #   SIGN_IDENTITY   code signing identity to use (default: auto-detected, prefers
 #                   "Developer ID Application", falls back to "Apple Development")
 #
-# Output: dist/SuperClean-<version>.dmg  (+ sha256 printed at the end)
+# Output: dist/Tebo-<version>.dmg  (+ sha256 printed at the end)
 #
 # Why a plain hdiutil and not create-dmg: the release path should not depend on
 # anything a fresh Mac does not already ship.
@@ -21,7 +21,7 @@ cd "$(dirname "$0")/.."
 UNSIGNED=0
 [[ "${1:-}" == "--unsigned" ]] && UNSIGNED=1
 
-APP_NAME="SuperClean"
+APP_NAME="Tebo"
 DD=".build/release-xcode"
 STAGE=".build/dmg-stage"
 DIST="dist"
@@ -57,8 +57,8 @@ fi
 step "3/7 release build"
 rm -rf "$DD"
 xcodebuild \
-  -project SuperClean.xcodeproj \
-  -scheme SuperClean \
+  -project Tebo.xcodeproj \
+  -scheme Tebo \
   -configuration Release \
   -derivedDataPath "$DD" \
   CODE_SIGN_STYLE=Manual \
@@ -74,7 +74,7 @@ VERSION="$(defaults read "$PWD/$APP/Contents/Info.plist" CFBundleShortVersionStr
 # ---------------------------------------------------------------- 4. verify
 step "4/7 verify the bundle"
 BUNDLE_ID="$(defaults read "$PWD/$APP/Contents/Info.plist" CFBundleIdentifier)"
-[[ "$BUNDLE_ID" == "com.superclean.app" ]] || die "unexpected bundle id: $BUNDLE_ID"
+[[ "$BUNDLE_ID" == "com.tebo.app" ]] || die "unexpected bundle id: $BUNDLE_ID"
 [[ -f "$APP/Contents/Resources/$APP_NAME.icns" ]] || die "app icon missing from the bundle"
 [[ -f "$APP/Contents/MacOS/czkawka_cli" ]] || die "engine missing from the bundle"
 [[ -f "$APP/Contents/Resources/NOTICE.md" ]] || die "NOTICE.md missing from the bundle"
@@ -132,9 +132,9 @@ echo "    sha256:   $SHA"
 echo "    signed:   $IDENTITY"
 echo
 echo "Install steps for the recipient (also inside the image as 'First Launch.txt'):"
-echo "    1. drag SuperClean.app to /Applications"
+echo "    1. drag Tebo.app to /Applications"
 echo "    2. right-click the app -> Open -> Open (once, because it is not notarized)"
-echo "    3. System Settings -> Privacy & Security -> Full Disk Access -> add SuperClean"
+echo "    3. System Settings -> Privacy & Security -> Full Disk Access -> add Tebo"
 echo
 if [[ "$IDENTITY" == Apple\ Development* ]]; then
   echo "NOTE: signed with a development certificate. macOS will still warn on first open"

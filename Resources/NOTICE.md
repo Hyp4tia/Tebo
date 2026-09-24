@@ -1,6 +1,6 @@
 # NOTICE
 
-SuperClean is GPL-3.0 (see LICENSE). It is an independent app, not a fork or an official build of
+Tebo is GPL-3.0 (see LICENSE). It is an independent app, not a fork or an official build of
 either project below, and it is not endorsed by them.
 
 ## czkawka_cli — MIT
@@ -33,9 +33,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 ## tw93/Mole — GPL-3.0
 
-SuperClean reimplements Mole's cleanup behaviour natively in Swift. No Mole code or binary is
+Tebo reimplements Mole's cleanup behaviour natively in Swift. No Mole code or binary is
 bundled or executed; the path tables, protection rules, and cleanup semantics were ported from
-Mole's shell sources (cited per row as `source:` in `Sources/SuperClean/Services/MoleTables/`).
+Mole's shell sources (cited per row as `source:` in `Sources/Tebo/Services/MoleTables/`).
 
 Mole is Copyright (c) tw93 and contributors, licensed GPL-3.0 (`https://github.com/tw93/Mole`).
 

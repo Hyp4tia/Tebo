@@ -6,7 +6,7 @@
 - How to add (M3):
   ```sh
   cargo build -p czkawka_cli --release
-  cp target/release/czkawka_cli SuperClean/Engines/
+  cp target/release/czkawka_cli Tebo/Engines/
   ```
 - Swift calls it in `Services/CzkawkaBridge.swift` via `Process` + NDJSON.
 - Pin version: write commit hash here when you bundle.
