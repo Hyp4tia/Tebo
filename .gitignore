@@ -11,6 +11,13 @@ SuperClean.app/
 # Bundled third-party engine binary (downloaded + hash-pinned by scripts/fetch-engine.sh)
 Engines/czkawka_cli
 
+# Release output (DMG + staging)
+dist/
+
+# Profiling / coverage artefacts
+*.profraw
+*.profdata
+
 # macOS noise
 .DS_Store
 ._*

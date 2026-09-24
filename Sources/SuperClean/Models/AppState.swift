@@ -61,8 +61,15 @@ final class AppState {
     }
 
     /// Last scan results per tab, keyed by tab id ("clean", "duplicates"...).
-    /// Small in M1 (mock data). Streams real engine output in M2/M3.
+    /// Populated by each tab's real scan; rows are lazy-rendered, so this holds metadata only.
     var resultsByTab: [String: [ScanResult]] = [:]
+
+    /// Rows a scan found but this app must NOT delete (needs root, report-only, app running).
+    /// Kept apart from resultsByTab so they can never be selected for deletion.
+    var advisoriesByTab: [String: [AdvisoryRow]] = [:]
+
+    /// One-line note about the last scan (absent locations, early stop, engine trouble).
+    var scanNotesByTab: [String: String] = [:]
 
     /// Which result rows the user ticked for deletion.
     var selectedIDs: Set<UUID> = []
@@ -72,6 +79,30 @@ final class AppState {
     /// Results for one tab (empty array if never scanned).
     func results(for tab: String) -> [ScanResult] {
         resultsByTab[tab] ?? []
+    }
+
+    /// Advisory rows for one tab.
+    func advisories(for tab: String) -> [AdvisoryRow] {
+        advisoriesByTab[tab] ?? []
+    }
+
+    /// Note for one tab, nil when the last scan had nothing to report.
+    func scanNote(for tab: String) -> String? {
+        scanNotesByTab[tab]
+    }
+
+    /// Record a table sweep's side output. Deletable rows are returned to the caller separately
+    /// (they go through SafetyGate before they reach resultsByTab).
+    func apply(_ outcome: MoleScanOutcome, to tab: String) {
+        advisoriesByTab[tab] = outcome.advisories
+        var notes: [String] = []
+        if outcome.absentLocationCount > 0 {
+            notes.append("\(outcome.absentLocationCount) known locations are not present on this Mac")
+        }
+        if outcome.truncated {
+            notes.append("the list stopped early, so it may be partial")
+        }
+        scanNotesByTab[tab] = notes.isEmpty ? nil : notes.joined(separator: "; ")
     }
 
     /// Selected results for one tab only.

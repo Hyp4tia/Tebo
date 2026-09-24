@@ -1,0 +1,47 @@
+SuperClean 1.0 — first launch
+============================
+
+SuperClean is not notarized by Apple yet, so macOS will ask you to confirm
+once. That is expected, and it only happens on the first open.
+
+INSTALL
+-------
+1. Drag SuperClean.app onto the Applications folder shortcut in this window.
+2. Open Applications in Finder, then RIGHT-CLICK (or Control-click)
+   SuperClean and choose "Open".
+3. macOS shows a warning that it cannot check the app for malicious
+   software. Click "Open" again.
+
+If "Open" is not offered, do this instead:
+  System Settings -> Privacy & Security -> scroll to Security ->
+  click "Open Anyway" next to the SuperClean message.
+
+GRANT FULL DISK ACCESS (recommended)
+------------------------------------
+Without this, macOS hides caches and logs that live inside other apps, so
+several scans come back empty or partial.
+
+  System Settings -> Privacy & Security -> Full Disk Access ->
+  "+" -> choose SuperClean from Applications -> turn the switch on.
+
+SuperClean tells you on its first screen whether it has this access. It
+never asks for an administrator password: anything that would need root is
+listed for you to run yourself.
+
+WHAT IT DOES
+------------
+Every row it offers you is a real path found on this Mac. It never shows
+sample or invented results. Removing anything moves it to the Trash, so you
+can put it back until you empty the Trash. Every action is written to
+~/Library/Logs/superclean/operations.log.
+
+Scanning is read-only. The engines it uses are: knowledge ported from
+tw93/Mole (GPL-3.0) and file analysis by czkawka (MIT). See NOTICE.md inside
+the app bundle for attribution.
+
+UNINSTALL
+---------
+Delete SuperClean.app from Applications. To remove its saved settings and
+logs as well:
+
+  rm -rf ~/.config/superclean ~/Library/Logs/superclean

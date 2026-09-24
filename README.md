@@ -17,6 +17,28 @@ natively, so no shell script ever runs.
 - Full Disk Access (System Settings → Privacy & Security → Full Disk Access), needed to see other
   apps' caches and containers. The app walks you to it on first launch.
 
+## Install a build
+
+```sh
+./scripts/release.sh          # -> dist/SuperClean-<version>.dmg (signed, ready to hand out)
+```
+
+`release.sh` verifies the engine digest, builds Release, checks the bundle really contains the
+icon/NOTICE/engine, signs with the best certificate it can find, and prints the DMG's SHA-256.
+Open the DMG, drag the app to Applications, then **right-click → Open** once: the app is not
+notarized, so macOS asks for that confirmation on first launch. The image carries the same
+instructions as `First Launch.txt`.
+
+Notarization removes that step and is one command away once a Developer ID certificate exists:
+
+```sh
+SIGN_IDENTITY="Developer ID Application: …" ./scripts/release.sh
+./scripts/notarize.sh
+```
+
+`notarize.sh` refuses to run without a Developer ID signature and a stored `notarytool`
+credential profile, and prints exactly how to create the profile if it is missing.
+
 ## Build and run
 
 ```sh
@@ -42,8 +64,8 @@ from `project.yml` builds a real signed `SuperClean.app`. After changing files, 
 
 | Tab | What it does | Status |
 |---|---|---|
-| Clean | Known-safe caches, logs and leftovers, grouped, biggest first | in progress |
-| Duplicates | Exact duplicates by hash, grouped, keep-one workflow | planned (engine) |
+| Clean | Mole's ported path tables, measured on this Mac, biggest first | working |
+| Duplicates | Exact duplicates by hash, grouped, keep-one workflow | engine being wired |
 | Apps | Inventory, uninstall plan with leftovers, shared-data guard | planned |
 | Disk | Disk explorer with drill-down and largest files | planned |
 | Health | Live CPU/memory/disk/process snapshot | partial |
@@ -65,8 +87,9 @@ Nothing in this app invents results: if a scan finds nothing, it says so.
 5. **Everything is logged** to `~/Library/Logs/superclean/operations.log`.
 6. **No privilege escalation beyond an explicit admin prompt**, only for a fixed, allow-listed set
    of system maintenance commands that each preview exactly what they will run.
-7. **The engine is hash-pinned.** `czkawka_cli` is verified against a hard-coded SHA-256 before use;
-   a tampered binary is refused, not run.
+7. **The engine is verified before it runs.** A developer checkout copy must match a hard-coded
+   SHA-256; the copy inside the app must carry a valid signature sealed by the app bundle. A binary
+   that matches neither is refused and reported in Settings, never executed.
 
 ## Layout
 
