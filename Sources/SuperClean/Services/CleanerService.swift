@@ -3,7 +3,9 @@ import Foundation
 // MARK: - CleanerService
 // Does the actual scanning + Trash deletes for Mole-style tabs.
 // Small + testable: no SwiftUI here, only FileManager.
-// All deletes go: SafetyGate check → FileManager.trashItem → OperationLog.
+// All deletes go: SafetyGate string check at scan time, then
+// DeletePipeline (PathValidator + inode recheck + trashItem) at delete time.
+// Nothing calls FileManager.trashItem except DeletePipeline.
 //
 // M2: real recursive sizes (cancellable, symlink-safe, error-tolerant),
 // per-app breakdown for Clean, plus purge + installer finders.
@@ -185,24 +187,14 @@ public struct CleanerService: Sendable {
 
     // MARK: Move to Trash (reversible, like Mole's mole_delete)
 
-    /// Move approved paths to Trash. Returns freed bytes.
+    /// Move approved paths to Trash through DeletePipeline, the app's only
+    /// path to FileManager.trashItem. Returns freed bytes; per-path outcomes
+    /// are in the pipeline's DeleteReport (and the OperationLog).
     /// Never uses rm -rf. Fails closed on any error.
     @discardableResult
-    public func moveToTrash(paths: [String]) async -> Int64 {
-        var freed: Int64 = 0
-        for path in paths {
-            let url = URL(fileURLWithPath: path)
-            let size = recursiveSize(at: path)
-            do {
-                var trashed: NSURL?
-                try FileManager.default.trashItem(at: url, resultingItemURL: &trashed)
-                freed += size
-                await OperationLog.shared.record("Trashed \(path) (\(size) bytes)")
-            } catch {
-                await OperationLog.shared.record("Skip \(path): \(error.localizedDescription)")
-            }
-        }
-        return freed
+    public func moveToTrash(paths: [String], whitelist: Set<String>) async -> Int64 {
+        let report = await DeletePipeline().trash(paths: paths, whitelist: whitelist)
+        return report.freedBytes
     }
 
     // MARK: Sizing helpers

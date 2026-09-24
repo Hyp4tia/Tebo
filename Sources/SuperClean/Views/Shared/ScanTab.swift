@@ -149,7 +149,7 @@ struct ScanTab<ExtraInfo: View>: View {
             if appState.dryRunEnabled {
                 await OperationLog.shared.record("[\(tabID)] Dry-run: would trash \(paths.count) items")
             } else {
-                await CleanerService().moveToTrash(paths: paths)
+                await CleanerService().moveToTrash(paths: paths, whitelist: appState.whitelist)
                 // Refresh list after delete.
                 appState.resultsByTab[tabID] = appState.results(for: tabID)
                     .filter { !paths.contains($0.path) }
