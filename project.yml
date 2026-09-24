@@ -14,25 +14,61 @@ settings:
   SWIFT_VERSION: "6.0"
   SWIFT_STRICT_CONCURRENCY: complete
   MACOSX_DEPLOYMENT_TARGET: "14.0"
-  CODE_SIGN_STYLE: Automatic
-  DEVELOPMENT_TEAM: ""  # fill in Xcode → Signing & Capabilities if you want to notarize
+  # Ad-hoc by default so a command line build works with no Apple team configured.
+  # scripts/release.sh overrides this with the Developer ID identity.
+  CODE_SIGN_STYLE: Manual
+  CODE_SIGN_IDENTITY: "-"
+  DEVELOPMENT_TEAM: ""
+  ENABLE_HARDENED_RUNTIME: YES
 
 targets:
   SuperClean:
     type: application
     platform: macOS
-    bundleId: com.superclean.app
     sources:
       - path: Sources/SuperClean
-    info:
-      path: Resources/Info.plist
-    entitlements:
-      path: Resources/SuperClean.entitlements
+      - path: Resources/SuperClean.icns
+        buildPhase: resources
+      - path: Resources/NOTICE.md
+        buildPhase: resources
+      - path: Resources/whitelist.default
+        buildPhase: resources
+      # Info.plist and entitlements are wired through build settings only. Deliberately NOT using
+      # xcodegen's `info:`/`entitlements:` keys: those GENERATE the file at that path, which silently
+      # overwrote hand-written keys (icon, category, copyright) once already.
+      - path: Resources/Info.plist
+        buildPhase: none
+      - path: Resources/SuperClean.entitlements
+        buildPhase: none
     settings:
       PRODUCT_NAME: SuperClean
+      # Set explicitly instead of relying on xcodegen's `bundleId` key (which this version ignores)
+      # or the bundleIdPrefix default (com.superclean.SuperClean). Must match the Logger subsystem
+      # in OperationLog and scripts/release.sh.
+      PRODUCT_BUNDLE_IDENTIFIER: com.superclean.app
       INFOPLIST_FILE: Resources/Info.plist
       CODE_SIGN_ENTITLEMENTS: Resources/SuperClean.entitlements
       COMBINE_HIDPI_IMAGES: YES
+    postBuildScripts:
+      # The czkawka engine ships next to the app executable and is signed with the same identity:
+      # a hardened-runtime app cannot launch an unsigned nested binary.
+      - name: Bundle + sign the czkawka engine
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          ENGINE_SRC="$SRCROOT/Engines/czkawka_cli"
+          DEST_DIR="$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/MacOS"
+          if [ ! -f "$ENGINE_SRC" ]; then
+            echo "warning: Engines/czkawka_cli is missing — run scripts/fetch-engine.sh (the app will report the engine as not installed)"
+            exit 0
+          fi
+          mkdir -p "$DEST_DIR"
+          cp -f "$ENGINE_SRC" "$DEST_DIR/czkawka_cli"
+          chmod 755 "$DEST_DIR/czkawka_cli"
+          SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
+          /usr/bin/codesign --force --options runtime --timestamp=none \
+            --sign "$SIGN_IDENTITY" "$DEST_DIR/czkawka_cli"
+          echo "bundled czkawka_cli signed as $SIGN_IDENTITY"
 
   SuperCleanTests:
     type: bundle.unit-test

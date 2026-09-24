@@ -21,8 +21,8 @@ enum SelfTest {
 
         let engine = EngineLocator.locate()
         switch engine {
-        case .ready(let url, let pinnedVersion):
-            print("engine          \(pinnedVersion) verified")
+        case .ready(let url, let pinnedVersion, let integrity):
+            print("engine          \(pinnedVersion) — \(integrity.summary)")
             print("engine path     \(url.path)")
         case .missing:
             print("engine          missing (run scripts/fetch-engine.sh)")
