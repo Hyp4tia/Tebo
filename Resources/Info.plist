@@ -18,5 +18,15 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>CFBundleIconFile</key>
+	<string>SuperClean</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>GPL-3.0. Cleanup knowledge ported from tw93/Mole (GPL-3.0); file analysis by czkawka_cli from qarmin/czkawka (MIT). Not affiliated with either project.</string>
 </dict>
 </plist>
