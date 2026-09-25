@@ -25,7 +25,7 @@ struct CleanView: View {
                 return outcome.deletable
             },
             extraInfo: {
-                AdvisoryList(
+                ReviewPanel(
                     note: appState.scanNote(for: "clean"),
                     advisories: appState.advisories(for: "clean")
                 )

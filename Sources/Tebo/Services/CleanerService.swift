@@ -158,13 +158,18 @@ public struct CleanerService: Sendable {
             guard SafetyGate.isAllowed(path: dir, whitelist: whitelist) else { continue }
             let url = URL(fileURLWithPath: dir)
             guard let children = try? FileManager.default.contentsOfDirectory(
-                at: url, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey],
+                at: url,
+                includingPropertiesForKeys: [
+                    .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey,
+                ],
                 options: []
             ) else { continue }
             for child in children {
                 if Task.isCancelled || out.count >= 1000 { break }
                 let values = try? child.resourceValues(
-                    forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey]
+                    forKeys: [
+                        .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey,
+                    ]
                 )
                 // Files only — never follow symlinks, never descend.
                 guard values?.isDirectory != true, values?.isSymbolicLink != true else { continue }
@@ -174,11 +179,16 @@ public struct CleanerService: Sendable {
                 guard SafetyGate.isAllowed(path: childPath, whitelist: whitelist) else { continue }
                 let size = Int64(values?.fileSize ?? 0)
                 guard size > 0 else { continue }
+                // A month-old installer has almost certainly served its purpose; a fresh download
+                // may still be about to be used, so it is listed but never ticked by default.
+                let ageInDays = values?.contentModificationDate
+                    .map { Date.now.timeIntervalSince($0) / 86_400 } ?? 0
                 out.append(ScanResult(
                     path: childPath,
                     sizeBytes: size,
                     category: "Installer",
-                    reason: "Installer file in \(URL(fileURLWithPath: dir).lastPathComponent)"
+                    reason: "Installer file in \\(URL(fileURLWithPath: dir).lastPathComponent)",
+                    recommendedForSelection: ageInDays >= 30
                 ))
             }
         }

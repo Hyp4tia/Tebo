@@ -235,6 +235,48 @@ struct CzkawkaBridgeTests {
 
     // MARK: argv hygiene (requirement: -N -M -W, never -D or -y)
 
+    @Test("the similar-images threshold is forwarded as -s, clamped to the engine's own range")
+    func imageThresholdIsForwardedAndClamped() async throws {
+        let tree = try makeTempDir("tebo-tree")
+        defer { try? FileManager.default.removeItem(at: tree) }
+
+        for (requested, expected) in [(5, "5"), (40, "40"), (999, "40"), (-3, "0")] {
+            let argsDir = try makeTempDir("tebo-args")
+            defer { try? FileManager.default.removeItem(at: argsDir) }
+            let argsFile = argsDir.appendingPathComponent("args.txt")
+            let engine = try makeFakeEngine(payload: "[]", argsFile: argsFile)
+
+            _ = try await CzkawkaBridge(engineURL: engine).results(
+                tool: .similarImages,
+                in: [tree],
+                imageMaxDifference: requested
+            )
+
+            let args = try String(contentsOf: argsFile, encoding: .utf8)
+                .split(separator: "\n").map(String.init)
+            #expect(args.first == "image")
+            let index = args.firstIndex(of: "-s")
+            #expect(index != nil, "the engine learns the threshold from -s")
+            if let index { #expect(args[index + 1] == expected, "requested \(requested) must become \(expected)") }
+        }
+    }
+
+    @Test("without a threshold the image tool gets no -s, and no other tool ever does")
+    func imageWithoutThresholdPassesNoFlag() async throws {
+        let tree = try makeTempDir("tebo-tree")
+        defer { try? FileManager.default.removeItem(at: tree) }
+        let argsDir = try makeTempDir("tebo-args")
+        defer { try? FileManager.default.removeItem(at: argsDir) }
+        let argsFile = argsDir.appendingPathComponent("args.txt")
+        let engine = try makeFakeEngine(payload: "[]", argsFile: argsFile)
+
+        _ = try await CzkawkaBridge(engineURL: engine).results(tool: .similarImages, in: [tree])
+
+        let args = try String(contentsOf: argsFile, encoding: .utf8)
+            .split(separator: "\n").map(String.init)
+        #expect(!args.contains("-s"), "the engine's default threshold is used when the user sets none")
+    }
+
     @Test("engine argv is complete and never destructive")
     func argumentsAreSafeAndComplete() async throws {
         let tree = try makeTempDir("tebo-tree")
@@ -290,7 +332,7 @@ struct CzkawkaBridgeTests {
             if tool == .duplicates {
                 #expect(args.contains("-s") && args.contains("SIZE_NAME"))
             } else {
-                #expect(!args.contains("-s"), "\(tool.clapName) must not get a dup search method")
+                #expect(!args.contains("-s"), "\(tool.clapName) gets -s only through its own documented flag")
             }
             // bad-names checks are opt-in: without any of these the engine returns [].
             if tool == .badNames {

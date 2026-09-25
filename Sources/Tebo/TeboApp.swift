@@ -33,9 +33,10 @@ struct TeboApp: App {
         }
         // Roomy default so tabs + stats + bottom bar never clip on launch.
         // contentMinSize stops the window shrinking below our min size.
-        .defaultSize(width: 1200, height: 780)
+        .defaultSize(width: 1240, height: 800)
         .windowResizability(.contentMinSize)
-        .windowToolbarStyle(.unified)
+        // The app draws its own nav bar, so the title bar is hidden rather than duplicated.
+        .windowStyle(.hiddenTitleBar)
 
         // The toolbar's SettingsLink() has nothing to open without this scene.
         Settings {

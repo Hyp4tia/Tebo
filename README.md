@@ -69,8 +69,8 @@ from `project.yml` builds a real signed `Tebo.app`. After changing files, re-run
 | Tab | What it does | Status |
 |---|---|---|
 | Clean | Mole's ported path tables (469 rows across 10 groups), measured on this Mac, biggest first | working |
-| Duplicates | Exact duplicates, similar images/music/video, empty folders/files, temp files, big files, via the bundled engine, with a keep-one-per-group action | working |
-| Apps | Leftovers whose owning app is gone, plus every entry it kept and why | working |
+| Duplicates | Exact duplicates, similar images/music/video, empty folders/files, temp files, big files, via the bundled engine. Shows previews, with three layouts (rows, thumbnails side by side, closest pair per group) and a similarity threshold slider wired to the engine's own `-s` measure | working |
+| Apps | Leftovers whose owning app is gone, grouped by the app they came from with the app's real icon when its bundle can still be found (including one still in the Trash) | working |
 | Disk | Volume total/free, snapshot count, and the largest files under a folder you pick | working |
 | Health | Live memory/cores/uptime plus Mole's maintenance catalog, admin tasks listed with the command to run yourself | working |
 | Toolbox | Purge, Installers, Fixers (symlinks/broken/ext/names), History | working |

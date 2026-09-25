@@ -12,19 +12,26 @@ public struct ScanResult: Identifiable, Hashable, Sendable, Codable {
     public let sizeBytes: Int64
     public let category: String   // e.g. "User app cache", "Duplicates"
     public let reason: String     // Why it is safe, shown in UI
+    /// True when the scanner that produced this row also knows a rule that makes it a safe
+    /// default choice (Mole's "safe" risk tier, a duplicate copy beyond the first per group, the
+    /// largest files, a stale installer). "Select recommended" ticks exactly these rows and
+    /// nothing else; no rule is invented at display time.
+    public let recommendedForSelection: Bool
 
     public init(
         id: UUID = UUID(),
         path: String,
         sizeBytes: Int64,
         category: String,
-        reason: String
+        reason: String,
+        recommendedForSelection: Bool = false
     ) {
         self.id = id
         self.path = path
         self.sizeBytes = sizeBytes
         self.category = category
         self.reason = reason
+        self.recommendedForSelection = recommendedForSelection
     }
 
     /// Human-readable size, e.g. "1.2 GB". Cached formatter = fast.

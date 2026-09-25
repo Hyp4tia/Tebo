@@ -19,12 +19,26 @@ public struct AdvisoryRow: Identifiable, Sendable, Hashable {
     public let detail: String
     /// Upstream citation, so the claim can be checked against Mole's source.
     public let source: String
+    /// Heading this entry belongs under in the review panel. The producer sets it when it knows
+    /// why the entry was kept; empty means the panel derives one from `detail`.
+    public let group: String
 
-    public init(id: String, title: String, detail: String, source: String) {
+    public init(id: String, title: String, detail: String, source: String, group: String = "") {
         self.id = id
         self.title = title
         self.detail = detail
         self.source = source
+        self.group = group
+    }
+
+    /// The explanation half of the row, used for grouping in the review panel.
+    public var reasonPhrase: String { detail }
+
+    /// The filesystem path this row points at, when it has one. Kept rows carry it after
+    /// "kept: " in `source`; table rows carry an upstream citation instead, so they have none.
+    public var pathForThumb: String {
+        if let range = source.range(of: "kept: ") { return String(source[range.upperBound...]) }
+        return source.hasPrefix("/") ? source : ""
     }
 }
 
@@ -109,7 +123,8 @@ public struct TargetScanner: Sendable {
                     id: "admin:\(target.label)",
                     title: target.label,
                     detail: "Needs an administrator password, which Tebo never asks for. Not touched.",
-                    source: target.source
+                    source: target.source,
+                    group: "Needs administrator rights"
                 ))
                 continue
             }
@@ -125,7 +140,8 @@ public struct TargetScanner: Sendable {
                     id: "report:\(target.label)",
                     title: target.label,
                     detail: "\(target.explanation)\(sizeText)\(whereText) Not removable from here.",
-                    source: target.source
+                    source: target.source,
+                    group: "Reported only, nothing to delete"
                 ))
                 continue
             }
@@ -138,7 +154,8 @@ public struct TargetScanner: Sendable {
                     id: "running:\(target.label)",
                     title: target.label,
                     detail: "\(guardBlock) is running. Close it and rescan.",
-                    source: target.source
+                    source: target.source,
+                    group: "In use right now"
                 ))
                 continue
             }
@@ -159,7 +176,12 @@ public struct TargetScanner: Sendable {
                         path: path,
                         sizeBytes: size,
                         category: target.group.rawValue,
-                        reason: reasonText(target)
+                        reason: reasonText(target),
+                        // Mole's own tier decides this, not the UI: only rebuildable caches and
+                        // logs it marks "safe", never something needing admin or reported only.
+                        recommendedForSelection: target.risk == .safe
+                            && !target.needsAdmin
+                            && !target.reportOnly
                     )
                 }
                 if let row { rows.append(row) }
@@ -174,7 +196,8 @@ public struct TargetScanner: Sendable {
                     id: "cap:\(target.label)",
                     title: target.label,
                     detail: "\(hidden) more \(hidden == 1 ? "entry" : "entries") in this folder were not listed.",
-                    source: target.source
+                    source: target.source,
+                    group: "Listed partially (safety cap)"
                 ))
                 rows = Array(rows.prefix(Self.sweepCap))
             }

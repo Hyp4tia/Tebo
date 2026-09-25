@@ -74,6 +74,14 @@ final class AppState {
     /// Which result rows the user ticked for deletion.
     var selectedIDs: Set<UUID> = []
 
+    /// Group id per result row, for the grouped tools (duplicates, similar media). Held here
+    /// rather than in the tab because the tab's own state does not survive leaving the tab.
+    var groupByRowID: [UUID: String] = [:]
+
+    /// Engine-reported extras per row (pixel dimensions, difference score, tags) for the tools
+    /// whose rows show previews. Populated by the Duplicates tab's scan.
+    var mediaDetailByRowID: [UUID: CzkawkaItemDetail] = [:]
+
     // MARK: Helpers
 
     /// Results for one tab (empty array if never scanned).
@@ -124,5 +132,36 @@ final class AppState {
     /// Clear selection (call after scan finishes or tab switches).
     func clearSelection() {
         selectedIDs.removeAll()
+    }
+
+    // MARK: Selection commands (the buttons in every results tab)
+
+    /// Tick every row this tab currently lists.
+    func selectAll(for tab: String) {
+        selectedIDs.formUnion(results(for: tab).map(\.id))
+    }
+
+    /// Tick exactly the rows their own scanner marked as a safe default.
+    func selectRecommended(for tab: String) {
+        selectedIDs.formUnion(results(for: tab).filter(\.recommendedForSelection).map(\.id))
+    }
+
+    /// Tick a specific set of rows (per-group "select all", keep-one-per-group).
+    func select(_ ids: some Sequence<UUID>) {
+        selectedIDs.formUnion(ids)
+    }
+
+    /// Untick a specific set of rows.
+    func deselect(_ ids: some Sequence<UUID>) {
+        selectedIDs.subtract(ids)
+    }
+
+    /// Flip one row's tick. Shared by every layout so a click means the same thing everywhere.
+    func toggleSelection(_ id: UUID) {
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
+        }
     }
 }

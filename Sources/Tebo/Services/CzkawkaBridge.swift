@@ -71,7 +71,8 @@ public struct CzkawkaBridge: Sendable {
     public func scan(
         tool: CzkawkaTool,
         in directories: [URL],
-        dupSearchMethod: CzkawkaDupSearchMethod = .hash
+        dupSearchMethod: CzkawkaDupSearchMethod = .hash,
+        imageMaxDifference: Int? = nil
     ) -> AsyncThrowingStream<CzkawkaItem, Error> {
         precondition(!directories.isEmpty, "scan requires at least one directory")
         let engineURL = self.engineURL
@@ -82,7 +83,8 @@ public struct CzkawkaBridge: Sendable {
                         engineURL: engineURL,
                         tool: tool,
                         directories: directories,
-                        dupSearchMethod: dupSearchMethod
+                        dupSearchMethod: dupSearchMethod,
+                        maxDifference: imageMaxDifference
                     ) { item in
                         try Task.checkCancellation()
                         continuation.yield(item)
@@ -105,10 +107,16 @@ public struct CzkawkaBridge: Sendable {
     public func results(
         tool: CzkawkaTool,
         in directories: [URL],
-        dupSearchMethod: CzkawkaDupSearchMethod = .hash
+        dupSearchMethod: CzkawkaDupSearchMethod = .hash,
+        imageMaxDifference: Int? = nil
     ) async throws -> [CzkawkaItem] {
         var collected: [CzkawkaItem] = []
-        for try await item in scan(tool: tool, in: directories, dupSearchMethod: dupSearchMethod) {
+        for try await item in scan(
+            tool: tool,
+            in: directories,
+            dupSearchMethod: dupSearchMethod,
+            imageMaxDifference: imageMaxDifference
+        ) {
             collected.append(item)
         }
         return collected
@@ -124,6 +132,7 @@ public struct CzkawkaBridge: Sendable {
         tool: CzkawkaTool,
         directories: [URL],
         dupSearchMethod: CzkawkaDupSearchMethod,
+        maxDifference: Int?,
         yield: (CzkawkaItem) throws -> Void
     ) async throws {
         // Fail fast and loud: a missing engine is an error, never an empty scan.
@@ -146,6 +155,10 @@ public struct CzkawkaBridge: Sendable {
         }
         if tool == .duplicates {
             arguments.append(contentsOf: ["-s", dupSearchMethod.clapValue])
+        }
+        if tool == .similarImages, let maxDifference {
+            // The engine's own strictness knob: 0 = identical, up to 40 = loosely similar.
+            arguments.append(contentsOf: ["-s", String(min(max(maxDifference, 0), 40))])
         }
         // Per-tool opt-in flags (bad-names checks). Never -F (fix rewrites files in
         // place), never -D/-y (delete/trash): Tebo only finds, it never mutates.
