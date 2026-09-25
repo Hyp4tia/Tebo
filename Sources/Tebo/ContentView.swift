@@ -52,9 +52,6 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            navBar
-            Divider().opacity(0.7)
-
             if appState.hasFullDiskAccess == false {
                 PermissionsBanner()
             }
@@ -62,6 +59,9 @@ struct ContentView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // The bar floats over the page rather than pushing it down: scroll views keep drawing
+        // underneath it, which is what gives the material something to blur.
+        .safeAreaInset(edge: .top, spacing: 0) { navBar }
         .frame(minWidth: 1040, minHeight: 680)
         .background(Color(nsColor: .windowBackgroundColor))
         // Engine verification and the permission probe each cost a disk read: once per launch.
@@ -103,6 +103,12 @@ struct ContentView: View {
         .padding(.horizontal, 14)
         .frame(height: 52)
         .background { WindowDragArea() }
+        // The glass comes from the platform material, not from a hand-rolled colour: the bar
+        // stays legible over whatever scrolls behind it.
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.primary.opacity(0.10)).frame(height: 1)
+        }
     }
 
     /// One control for delete behaviour, labelled so its state is readable at a glance.
