@@ -28,8 +28,17 @@ struct CzkawkaBridgeTests {
 
     // MARK: Helpers
 
-    /// Temp dirs the bridge creates during a scan. Empty after every clean run.
+    /// Temp scan dirs left over during this test process, ignoring any that already existed when
+    /// the process started: an open copy of the app legitimately owns one, and that is not a leak.
     private func tempScanDirs() -> [URL] {
+        Self.allTempScanDirs().filter { !Self.scanDirsAtStart.contains($0.lastPathComponent) }
+    }
+
+    private static let scanDirsAtStart: Set<String> = Set(
+        allTempScanDirs().map(\.lastPathComponent)
+    )
+
+    private static func allTempScanDirs() -> [URL] {
         (try? FileManager.default.contentsOfDirectory(
             at: FileManager.default.temporaryDirectory, includingPropertiesForKeys: nil
         ))?.filter { $0.lastPathComponent.hasPrefix("tebo-scan-") } ?? []

@@ -1,13 +1,13 @@
 [
   [
     {
-      "path": "/Users/developer/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/extras/subA/report.txt",
+      "path": "/Users/developer/tebo-fixture-tree/extras/subA/report.txt",
       "modified_date": 1790276174,
       "size": 10240,
       "hash": ""
     },
     {
-      "path": "/Users/developer/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/extras/subB/report.txt",
+      "path": "/Users/developer/tebo-fixture-tree/extras/subB/report.txt",
       "modified_date": 1790276174,
       "size": 10240,
       "hash": ""
@@ -15,13 +15,13 @@
   ],
   [
     {
-      "path": "/Users/developer/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/extras/subA/other.txt",
+      "path": "/Users/developer/tebo-fixture-tree/extras/subA/other.txt",
       "modified_date": 1790276174,
       "size": 12288,
       "hash": ""
     },
     {
-      "path": "/Users/developer/.hermes/profiles/bok/cache/scratch/tebo-fixture-tree/extras/subB/other.txt",
+      "path": "/Users/developer/tebo-fixture-tree/extras/subB/other.txt",
       "modified_date": 1790276174,
       "size": 12288,
       "hash": ""

@@ -75,7 +75,7 @@ from `project.yml` builds a real signed `Tebo.app`. After changing files, re-run
 | Health | Live memory/cores/uptime plus Mole's maintenance catalog, admin tasks listed with the command to run yourself | working |
 | Toolbox | Purge, Installers, Fixers (symlinks/broken/ext/names), History | working |
 
-The honest version of that table lives in `.hermes/plans/2026-09-24_tebo-v1.0-launch.md`.
+The development plan and the working notes are kept beside the checkout, not published here.
 Nothing in this app invents results: if a scan finds nothing, it says so.
 
 ## Safety model
