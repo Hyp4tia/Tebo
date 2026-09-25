@@ -48,11 +48,11 @@ enum EngineStatus: Sendable, Equatable {
     var summary: String {
         switch self {
         case .missing:
-            return "Not installed — run scripts/fetch-engine.sh"
+            return "Not installed: run scripts/fetch-engine.sh"
         case .unverified(let reason):
             return "Refused: \(reason)"
         case .ready(_, let version, let integrity):
-            return "\(version) — \(integrity.summary)"
+            return "\(version): \(integrity.summary)"
         }
     }
 }

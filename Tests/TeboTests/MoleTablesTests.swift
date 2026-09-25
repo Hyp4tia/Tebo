@@ -44,8 +44,8 @@ struct MoleTablesTests {
 
     @Test("Every table is non-empty")
     func tablesNonEmpty() {
-        for (name, rows, _) in Self.tables {
-            #expect(!rows.isEmpty, "\\(name) table is empty")
+        for (name, rows, group) in Self.tables {
+            #expect(!rows.isEmpty, "\(name) (\(group.rawValue)) table is empty")
         }
     }
 

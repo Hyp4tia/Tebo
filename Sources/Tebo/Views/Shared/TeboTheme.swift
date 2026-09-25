@@ -48,6 +48,51 @@ extension View {
     func teboCanvas() -> some View { modifier(TeboCanvas()) }
 }
 
+// MARK: Navigation pills
+
+/// The one pill style for the window's navigation and the Toolbox's sub-tools, so a pill means
+/// the same thing and behaves the same way wherever it appears.
+struct TeboPill: View {
+    let title: String
+    let systemImage: String
+    let isActive: Bool
+    var helpText: String? = nil
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12.5, weight: isActive ? .semibold : .regular))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .foregroundStyle(isActive ? Color.primary : Color.secondary)
+            .background {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(fill)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(isActive ? 0.12 : 0), lineWidth: 1)
+                    }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(helpText ?? title)
+        .onHover { isHovered = $0 }
+    }
+
+    private var fill: Color {
+        if isActive { return Color(nsColor: .controlBackgroundColor) }
+        return isHovered ? Color.primary.opacity(0.06) : .clear
+    }
+}
+
 // MARK: Numbers and text
 
 /// Size or count with tabular figures so columns line up down a list.

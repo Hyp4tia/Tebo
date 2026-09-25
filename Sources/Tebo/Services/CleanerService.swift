@@ -78,7 +78,7 @@ public struct CleanerService: Sendable {
                     path: childPath,
                     sizeBytes: size,
                     category: label,
-                    reason: "\(reason) — loose file"
+                    reason: "\(reason): loose file"
                 ))
             }
         }

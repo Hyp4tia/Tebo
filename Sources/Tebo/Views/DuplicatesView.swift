@@ -144,7 +144,7 @@ struct DuplicatesView: View {
 
     private func runScan(engine: EngineStatus) async -> [ScanResult] {
         guard case .ready(let engineURL, _, _) = engine else {
-            appState.setScanNote("Engine not available — nothing was scanned.", for: "duplicates")
+            appState.setScanNote("Engine not available: nothing was scanned.", for: "duplicates")
             return []
         }
         let bridge = CzkawkaBridge(engineURL: engineURL)

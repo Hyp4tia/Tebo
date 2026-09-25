@@ -122,7 +122,7 @@ Sources/Tebo/
     AppState.swift           # @Observable app state (dry-run, whitelist, engine, results)
     ScanResult.swift         # one cleanable item (path + size + reason)
   Services/
-    SafetyGate.swift         # Mole's path rules — every path must pass
+    SafetyGate.swift         # Mole's path rules, every path must pass
     PathValidator.swift      # path-string validation (traversal, symlinks, critical list, inodes)
     DeletePipeline.swift     # the only place that calls trashItem
     BoundedProcessRunner.swift # the only place that spawns a child process
@@ -148,11 +148,11 @@ Resources/                   # Info.plist, NOTICE.md, whitelist.default
 
 GPL-3.0 (`LICENSE`). `NOTICE.md` carries the full attribution:
 
-- **czkawka_cli** by Rafał Mikrut (MIT) — bundled and hash-pinned. The `krokiet` frontend is
+- **czkawka_cli** by Rafał Mikrut (MIT), bundled and hash-pinned. The `krokiet` frontend is
   GPL-3.0-only and is deliberately not shipped.
-- **tw93/Mole** (GPL-3.0) — source of the cleanup path tables, protection rules and semantics that
+- **tw93/Mole** (GPL-3.0), source of the cleanup path tables, protection rules and semantics that
   this app reimplements in Swift. Tebo is an independent project: its own name and icon, no
   affiliation and no implied endorsement, as Mole's TRADEMARK.md requires.
-- **ffmpeg** (optional, not bundled) — enables similar-video and video file checks when installed.
+- **ffmpeg** (optional, not bundled), enables similar-video and video file checks when installed.
 
 The app was called SuperClean during development and was renamed to Tebo before its first release.

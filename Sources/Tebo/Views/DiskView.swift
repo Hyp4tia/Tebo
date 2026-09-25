@@ -16,22 +16,40 @@ struct DiskView: View {
     var body: some View {
         let engine = appState.engine
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                StatCard(
-                    title: "Free",
+            HStack(spacing: 12) {
+                StatTile(
+                    label: "Free",
                     value: status?.disk.displayAvailable ?? "unavailable",
                     systemImage: "internaldrive"
                 )
-                StatCard(
-                    title: "Volume",
+                StatTile(
+                    label: "Volume",
                     value: status?.disk.displayTotal ?? "unavailable",
                     systemImage: "externaldrive"
                 )
-                StatCard(
-                    title: "Snapshots",
+                StatTile(
+                    label: "Snapshots",
                     value: snapshotText,
                     systemImage: "clock.arrow.circlepath"
                 )
+            }
+
+            if let fraction = status?.disk.usedFraction {
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.linear)
+                        .tint(.accentColor)
+                        .controlSize(.small)
+                    HStack {
+                        Text("\(usedText) used")
+                        Spacer()
+                        Text("\(freeText) free")
+                    }
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 4)
             }
 
             ScanTab(
@@ -52,9 +70,14 @@ struct DiskView: View {
                                 .font(.caption)
                         }
                         if let detail = snapshots?.detail {
-                            Label(detail, systemImage: "info.circle")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                TeboBadge(text: "Snapshot probe", systemImage: "info.circle")
+                                Text(detail)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .help(detail)
+                            }
                         }
                     }
                 }
@@ -78,9 +101,20 @@ struct DiskView: View {
         }
     }
 
+    private var usedText: String {
+        guard let total = status?.disk.totalBytes, let available = status?.disk.availableBytes else {
+            return "unavailable"
+        }
+        return TeboBytes.text(max(0, total - available))
+    }
+
+    private var freeText: String {
+        status?.disk.displayAvailable ?? "unavailable"
+    }
+
     private func runScan(engine: EngineStatus) async -> [ScanResult] {
         guard case .ready(let engineURL, _, _) = engine else {
-            appState.setScanNote("Engine not available — largest files cannot be listed.", for: "disk")
+            appState.setScanNote("Engine not available: largest files cannot be listed.", for: "disk")
             return []
         }
         var rows: [ScanResult] = []

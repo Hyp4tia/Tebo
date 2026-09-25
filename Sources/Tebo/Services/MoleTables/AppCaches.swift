@@ -116,7 +116,7 @@ public enum AppCaches {
             "Messages sticker cache",
             "Library/Messages/StickerCache",
             kind: .directorySweep,
-            explanation: "Sticker previews only — never chat history or attachments. Rebuilt on demand.",
+            explanation: "Sticker previews only: never chat history or attachments. Rebuilt on demand.",
             source: "mole lib/clean/user.sh:893"
         ),
         target(
@@ -139,7 +139,7 @@ public enum AppCaches {
             "Wallpaper agent cache",
             "Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches",
             kind: .directorySweep,
-            explanation: "Wallpaper daemon cache. Never touches the aerial videos themselves — only rebuildable cache data.",
+            explanation: "Wallpaper daemon cache. Never touches the aerial videos themselves: only rebuildable cache data.",
             source: "mole lib/clean/user.sh:983"
         ),
         target(

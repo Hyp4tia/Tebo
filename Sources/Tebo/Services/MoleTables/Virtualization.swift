@@ -114,7 +114,7 @@ public enum Virtualization {
             path: .homeRelative("Library/Group Containers/*dev.orbstack/data"),
             kind: .glob,
             risk: .review,
-            explanation: "OrbStack VM/container data. Upstream only reports its size and points at `docker system df` for pruning — the data is daemon-managed, so Tebo reports it too and never deletes it.",
+            explanation: "OrbStack VM/container data. Upstream only reports its size and points at `docker system df` for pruning: the data is daemon-managed, so Tebo reports it too and never deletes it.",
             reportOnly: true,
             source: "mole lib/clean/dev.sh:1270"
         ),

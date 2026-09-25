@@ -48,7 +48,7 @@ public struct OptimizeRunner: Sendable {
 
         // Requirement: missing binaries are detected up front and reported, never attempted.
         guard OptimizeCatalog.isAvailable(task, fileManager: fileManager) else {
-            await log("Optimize \(task.id): skipped — binary unavailable")
+            await log("Optimize \(task.id): skipped, binary unavailable")
             return .skippedUnavailableBinary
         }
 
@@ -59,7 +59,7 @@ public struct OptimizeRunner: Sendable {
         // This mirrors Mole's optimize_sudo_available gate (tasks.sh:41-46): without an upfront
         // sudo session, sudo-gated tasks report SKIPPED instead of prompting.
         if task.needsAdmin, getuid() != 0 {
-            await log("Optimize \(task.id): skipped — needs admin")
+            await log("Optimize \(task.id): skipped, needs admin")
             return .skippedNeedsAdmin
         }
 

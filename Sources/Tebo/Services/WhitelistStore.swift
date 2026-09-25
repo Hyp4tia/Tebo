@@ -40,7 +40,7 @@ public enum WhitelistStore {
             at: file.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        var text = "# Tebo whitelist — one protected substring per line.\n"
+        var text = "# Tebo whitelist: one protected substring per line.\n"
         for entry in entries.sorted() {
             text += "\(entry)\n"
         }

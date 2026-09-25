@@ -149,12 +149,12 @@ struct InstallerFinderTests {
     func findsStandardInstallers() async throws {
         let fixture = try Fixture(directoryName: "Downloads")
         defer { fixture.tearDown() }
-        try fixture.write(10, named: "FakeTool.dmg")
-        try fixture.write(20, named: "Setup.pkg")
-        try fixture.write(30, named: "Combo.mpkg")
-        try fixture.write(40, named: "Disk.iso")
-        try fixture.write(50, named: "Update.xip")
-        try fixture.write(60, named: "notes.txt") // never an installer
+        _ = try fixture.write(10, named: "FakeTool.dmg")
+        _ = try fixture.write(20, named: "Setup.pkg")
+        _ = try fixture.write(30, named: "Combo.mpkg")
+        _ = try fixture.write(40, named: "Disk.iso")
+        _ = try fixture.write(50, named: "Update.xip")
+        _ = try fixture.write(60, named: "notes.txt") // never an installer
 
         let rows = await fixture.finder().findInstallers()
 
@@ -180,15 +180,15 @@ struct InstallerFinderTests {
     func depthLimitIsTwo() async throws {
         let fixture = try Fixture(directoryName: "Downloads")
         defer { fixture.tearDown() }
-        try fixture.write(10, named: "root.pkg")
-        try fixture.write(10, named: "level2.dmg", relative: "sub")
-        try fixture.write(10, named: "too-deep.pkg", relative: "sub/sub2")
+        _ = try fixture.write(10, named: "root.pkg")
+        _ = try fixture.write(10, named: "level2.dmg", relative: "sub")
+        _ = try fixture.write(10, named: "too-deep.pkg", relative: "sub/sub2")
         // A pathological chain: an installer buried 20 levels down must
         // not be found, and - more importantly - the scan must RETURN
         // instead of walking the chain forever.
         var deepPath = "sub"
         for _ in 0..<20 { deepPath += "/sub" }
-        try fixture.write(10, named: "bottom.pkg", relative: deepPath)
+        _ = try fixture.write(10, named: "bottom.pkg", relative: deepPath)
 
         let rows = await fixture.finder().findInstallers()
 
@@ -208,15 +208,15 @@ struct InstallerFinderTests {
             ZipEntry(name: "readme.txt", data: Data("hello".utf8)),
             ZipEntry(name: "data.bin", data: Data(count: 4)),
         ])
-        try fixture.write(notes, named: "notes.zip")
+        _ = try fixture.write(notes, named: "notes.zip")
         let appZip = ZipBuilder.build(entries: [
             ZipEntry(name: "Foo.app/Contents/Info.plist", data: Data("x".utf8)),
         ])
-        try fixture.write(appZip, named: "App.zip")
+        _ = try fixture.write(appZip, named: "App.zip")
         let pkgZip = ZipBuilder.build(entries: [
             ZipEntry(name: "Setup.pkg", data: Data(count: 8)),
         ])
-        try fixture.write(pkgZip, named: "pkginside.zip")
+        _ = try fixture.write(pkgZip, named: "pkginside.zip")
 
         let rows = await fixture.finder().findInstallers()
 
@@ -295,8 +295,8 @@ struct InstallerFinderTests {
         let fixture = try Fixture(directoryName: "Downloads")
         defer { fixture.tearDown() }
         let appZip = ZipBuilder.build(entries: [ZipEntry(name: "Foo.app/", data: Data())])
-        try fixture.write(appZip, named: "App.zip")
-        try fixture.write(10, named: "Real.dmg")
+        _ = try fixture.write(appZip, named: "App.zip")
+        _ = try fixture.write(10, named: "Real.dmg")
 
         let rows = await fixture.finder(inspectZipPayloads: false).findInstallers()
 

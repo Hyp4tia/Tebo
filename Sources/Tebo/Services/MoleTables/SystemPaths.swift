@@ -150,7 +150,7 @@ public enum SystemPaths {
             path: .homeRelative("Library/LaunchAgents"),
             kind: .directorySweep,
             risk: .review,
-            explanation: "Mole's optimize audit only REPORTS LaunchAgents whose absolute program path is missing — it never deletes the plist or unloads the label, because a missing executable does not prove the service is unwanted. Tebo mirrors that: report-only.",
+            explanation: "Mole's optimize audit only REPORTS LaunchAgents whose absolute program path is missing: it never deletes the plist or unloads the label, because a missing executable does not prove the service is unwanted. Tebo mirrors that: report-only.",
             reportOnly: true,
             source: "mole lib/optimize/tasks.sh:1177"
         ),

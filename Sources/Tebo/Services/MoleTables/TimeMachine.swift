@@ -18,7 +18,7 @@ public enum TimeMachine {
             kind: .directorySweep,
             risk: .review,
             needsAdmin: true,
-            explanation: "Local APFS snapshots (com.apple.TimeMachine.*). Upstream only reports the count and suggests reviewing with `tmutil listlocalsnapshots /` — deleting snapshots is the user's call via Time Machine, and thinning needs admin. Report-only.",
+            explanation: "Local APFS snapshots (com.apple.TimeMachine.*). Upstream only reports the count and suggests reviewing with `tmutil listlocalsnapshots /`: deleting snapshots is the user's call via Time Machine, and thinning needs admin. Report-only.",
             reportOnly: true,
             source: "mole lib/clean/system.sh:1466"
         ),

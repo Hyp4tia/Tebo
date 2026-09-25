@@ -49,7 +49,6 @@ struct ContentView: View {
     @Environment(AppState.self) private var appState
 
     @State private var section: TeboSection = .clean
-    @State private var hovered: TeboSection?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,7 +85,14 @@ struct ContentView: View {
             .padding(.trailing, 10)
 
             ForEach(TeboSection.allCases) { candidate in
-                pill(candidate)
+                TeboPill(
+                    title: candidate.title,
+                    systemImage: candidate.symbol,
+                    isActive: section == candidate,
+                    helpText: candidate.help
+                ) {
+                    section = candidate
+                }
             }
 
             Spacer(minLength: 12)
@@ -97,42 +103,6 @@ struct ContentView: View {
         .padding(.horizontal, 14)
         .frame(height: 52)
         .background { WindowDragArea() }
-    }
-
-    private func pill(_ candidate: TeboSection) -> some View {
-        let isActive = section == candidate
-        return Button {
-            section = candidate
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: candidate.symbol)
-                    .font(.system(size: 11, weight: .semibold))
-                Text(candidate.title)
-                    .font(.system(size: 12.5, weight: isActive ? .semibold : .regular))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .foregroundStyle(isActive ? Color.primary : Color.secondary)
-            .background {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(fill(for: candidate, isActive: isActive))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(isActive ? 0.12 : 0), lineWidth: 1)
-                    }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .help(candidate.help)
-        .onHover { inside in
-            if inside { hovered = candidate } else if hovered == candidate { hovered = nil }
-        }
-    }
-
-    private func fill(for candidate: TeboSection, isActive: Bool) -> Color {
-        if isActive { return Color(nsColor: .controlBackgroundColor) }
-        return hovered == candidate ? Color.primary.opacity(0.06) : .clear
     }
 
     /// One control for delete behaviour, labelled so its state is readable at a glance.

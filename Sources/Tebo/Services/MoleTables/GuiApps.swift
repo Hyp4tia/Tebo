@@ -253,7 +253,7 @@ public enum GuiApps {
             "WeChat logs",
             "Library/Containers/com.tencent.xinWeChat/Data/Documents/app_data/log",
             kind: .directorySweep,
-            explanation: "WeChat app logs only — chat databases and received files elsewhere in the container are never touched.",
+            explanation: "WeChat app logs only: chat databases and received files elsewhere in the container are never touched.",
             processGuard: wechatGuard,
             source: "mole lib/clean/app_caches.sh:805"
         ),
@@ -691,7 +691,7 @@ public enum GuiApps {
             "LM Studio cache",
             "Library/Caches/com.lmstudio.lmstudio",
             kind: .directorySweep,
-            explanation: "LM Studio cache. The legacy ~/.cache/lm-studio root (models/presets/chats) is never cleaned — only this rebuildable cache path.",
+            explanation: "LM Studio cache. The legacy ~/.cache/lm-studio root (models/presets/chats) is never cleaned: only this rebuildable cache path.",
             source: "mole lib/clean/app_caches.sh:887"
         ),
 

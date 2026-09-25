@@ -21,10 +21,33 @@ struct HealthView: View {
                 Text("Live system snapshot, plus maintenance that is safe to run without root")
                     .foregroundStyle(.secondary)
 
-                HStack {
-                    StatCard(title: "Memory used", value: memoryText, systemImage: "memorychip")
-                    StatCard(title: "CPU cores", value: "\(status?.activeProcessorCount ?? status?.processorCount ?? 0)", systemImage: "cpu")
-                    StatCard(title: "Uptime", value: uptimeText, systemImage: "clock")
+                HStack(spacing: 12) {
+                    StatTile(
+                        label: "Memory used",
+                        value: memoryValueText,
+                        systemImage: "memorychip",
+                        detail: memoryDetailText
+                    )
+                    StatTile(label: "CPU cores", value: "\(status?.activeProcessorCount ?? status?.processorCount ?? 0)", systemImage: "cpu")
+                    StatTile(label: "Uptime", value: uptimeText, systemImage: "clock")
+                }
+
+                if let fraction = status?.memory.usedFraction {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView(value: fraction)
+                            .progressViewStyle(.linear)
+                            .tint(.accentColor)
+                            .controlSize(.small)
+                        HStack {
+                            Text("\(memoryUsedText) used")
+                            Spacer()
+                            Text("\(memoryFreeText) free")
+                        }
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 4)
                 }
 
                 Text("Maintenance")
@@ -109,12 +132,28 @@ struct HealthView: View {
 
     // MARK: Text
 
-    private var memoryText: String {
+    private var memoryValueText: String {
         guard let memory = status?.memory else { return "unavailable" }
         if let fraction = memory.usedFraction {
-            return String(format: "%.0f%% of %@", fraction * 100, memory.displayTotal ?? "—")
+            return String(format: "%.0f%%", fraction * 100)
         }
         return memory.displayFree.map { "\($0) free" } ?? "unavailable"
+    }
+
+    private var memoryDetailText: String? {
+        guard let memory = status?.memory, memory.usedFraction != nil else { return nil }
+        return memory.displayTotal.map { "of \($0)" }
+    }
+
+    private var memoryUsedText: String {
+        guard let total = status?.memory.totalBytes, let free = status?.memory.freeBytes else {
+            return "unavailable"
+        }
+        return TeboBytes.text(max(0, total - free))
+    }
+
+    private var memoryFreeText: String {
+        status?.memory.displayFree ?? "unavailable"
     }
 
     private var uptimeText: String {

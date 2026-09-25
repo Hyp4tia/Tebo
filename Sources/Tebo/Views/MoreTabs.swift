@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - ToolboxView (Mole purge/installer + Krokiet small tools + History)
 // Purge = node_modules/target/dist. Installer = DMG/PKG. History = operations.log.
-// NOTE: Uses a segmented Picker, NOT a nested TabView — a TabView inside
+// NOTE: Sub-tools are a pill row, not a nested TabView: a TabView inside
 // ContentView's TabView makes the outer bar jump/shift on macOS.
 
 struct ToolboxView: View {
@@ -13,6 +13,16 @@ struct ToolboxView: View {
         case installers = "Installers"
         case fixers = "Fixers"
         case history = "History"
+
+        // The same symbol each tool's ScanTab header uses, so the picker and its content agree.
+        var symbol: String {
+            switch self {
+            case .purge: "hammer"
+            case .installers: "archivebox"
+            case .fixers: "wrench.and.screwdriver"
+            case .history: "clock.arrow.circlepath"
+            }
+        }
     }
 
     @Environment(AppState.self) private var appState
@@ -27,13 +37,17 @@ struct ToolboxView: View {
         let whitelist = appState.whitelist
         VStack(alignment: .leading, spacing: 12) {
             // Sub-navigation stays inside the page, never touches the window tab bar.
-            Picker("Tool", selection: $selectedTool) {
+            HStack(spacing: 4) {
                 ForEach(Tool.allCases, id: \.self) { tool in
-                    Text(tool.rawValue).tag(tool)
+                    TeboPill(
+                        title: tool.rawValue,
+                        systemImage: tool.symbol,
+                        isActive: selectedTool == tool
+                    ) {
+                        selectedTool = tool
+                    }
                 }
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 500)
 
             // Content swaps below, outer tab bar never moves.
             switch selectedTool {
@@ -75,36 +89,51 @@ struct ToolboxView: View {
                                 .frame(maxWidth: 240)
                                 Spacer()
                                 Button("Choose folder…") { chooseFixerRoot() }
-                                Text(fixerRoot)
+                                TeboPath(path: fixerRoot)
+                            }
+                            HStack(spacing: 6) {
+                                TeboBadge(text: "Finder only", systemImage: "eye", tint: .secondary)
+                                Text("Anything you tick moves to the Trash, never rewritten in place.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
                             }
-                            Text("Finders only. The engine can also rewrite files in place, and Tebo deliberately never passes that flag: anything you tick here moves to the Trash instead, so it stays reversible.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            AdvisoryList(note: appState.scanNote(for: "fixers"), advisories: [])
+                            ReviewPanel(note: appState.scanNote(for: "fixers"), advisories: [])
                         }
                     }
                 )
             case .history:
                 // History sub-view (like `mo history`)
-                VStack(alignment: .leading) {
-                    Text("History").font(.largeTitle).bold()
-                    Text("Every preview + Trash move, newest last").foregroundStyle(.secondary)
-                    ScrollView {
-                        LazyVStack(alignment: .leading) {
-                            ForEach(history, id: \.self) { line in
-                                Text(line).font(.caption).monospaced().textSelection(.enabled)
-                                Divider()
+                VStack(alignment: .leading, spacing: 10) {
+                    TeboSectionHeader(title: "History", systemImage: "clock.arrow.circlepath") {
+                        TeboBadge(text: "\(history.count)")
+                        Button {
+                            Task { history = await OperationLog.shared.recentLines() }
+                        } label: {
+                            Label("Reload", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    Text("Every preview + Trash move, newest last")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if history.isEmpty {
+                        TeboEmptyState(
+                            systemImage: "clock.arrow.circlepath",
+                            title: "Nothing logged yet",
+                            message: "Preview and Trash moves appear here."
+                        )
+                    } else {
+                        ScrollView {
+                            LazyVStack(alignment: .leading) {
+                                ForEach(history, id: \.self) { line in
+                                    Text(line).font(.caption).monospaced().textSelection(.enabled)
+                                    Divider()
+                                }
                             }
                         }
                     }
-                    Button("Reload") { Task { history = await OperationLog.shared.recentLines() } }
-                        .buttonStyle(.bordered)
                 }
-                .padding()
                 .onAppear { Task { history = await OperationLog.shared.recentLines() } }
             }
         }
@@ -128,7 +157,7 @@ struct ToolboxView: View {
 
     private func runFixerScan() async -> [ScanResult] {
         guard case .ready(let engineURL, _, _) = appState.engine else {
-            appState.setScanNote("Engine not available — nothing was scanned.", for: "fixers")
+            appState.setScanNote("Engine not available: nothing was scanned.", for: "fixers")
             return []
         }
         var rows: [ScanResult] = []
@@ -172,14 +201,16 @@ struct SettingsView: View {
         Form {
             // The dry-run switch lives in the toolbar: one control for one state, always visible.
             Section("Safety") {
-                Text("Dry-run is the toolbar switch. While it is on, every scan is a preview and nothing is deleted. With it off, removals move files to the Trash and are logged to ~/Library/Logs/tebo/operations.log.")
-                    .font(.callout)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Dry-run is the toolbar switch. On: every scan is a preview, nothing is deleted.")
+                    Text("Off: removals move files to the Trash and are logged to ~/Library/Logs/tebo/operations.log.")
+                }
+                .font(.callout)
             }
-            Section("Whitelist — never touch these") {
+            Section("Whitelist: never touch these") {
                 ForEach(Array(appState.whitelist).sorted(), id: \.self) { entry in
                     HStack {
-                        Text(entry).monospaced()
+                        TeboPath(path: entry)
                         Spacer()
                         Button("Remove") { appState.removeWhitelist(entry) }
                     }
@@ -199,7 +230,7 @@ struct SettingsView: View {
                 LabeledContent("czkawka_cli", value: appState.engine.summary)
                 LabeledContent(
                     "ffmpeg",
-                    value: appState.ffmpegPath ?? "Not installed — similar videos and video checks stay disabled"
+                    value: appState.ffmpegPath ?? "Not installed: similar videos and video checks stay disabled"
                 )
                 Button("Re-check engines") { Task { await appState.refreshTooling() } }
                 Text("czkawka_cli is MIT (qarmin/czkawka) and is bundled hash-verified. Cleanup rules are ported from tw93/Mole (GPL-3.0). See NOTICE.md.")

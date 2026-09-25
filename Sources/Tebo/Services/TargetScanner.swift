@@ -321,7 +321,7 @@ public struct TargetScanner: Sendable {
     private func reasonText(_ target: CleanTarget) -> String {
         var text = target.explanation
         if target.risk == .review {
-            text = "Review first — \(text)"
+            text = "Review first: \(text)"
         }
         if let prune = target.pruneRule, case .keepCurrentSymlinkTarget = prune {
             text += " Keeps the version the app currently uses."
