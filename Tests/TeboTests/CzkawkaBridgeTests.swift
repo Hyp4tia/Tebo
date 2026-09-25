@@ -1,3 +1,4 @@
+import AppKit
 import Darwin
 import Foundation
 import Testing
@@ -412,6 +413,94 @@ struct CzkawkaBridgeTests {
             #expect(FileManager.default.fileExists(atPath: url.path))
         }
         #expect(tempScanDirs().isEmpty)
+    }
+
+    @Test("real engine: the image threshold decides how similar counts as similar", .enabled(if: engineAvailable))
+    func realEngineImageThresholdChangesResults() async throws {
+        let tree = try makeTempDir("tebo-images")
+        defer { try? FileManager.default.removeItem(at: tree) }
+
+        // Noise does not compress, so these stay above the engine's 16 KB minimum image size.
+        // The same seed makes `original` and `copy` byte-identical, and the block makes `tweaked`
+        // measurably different rather than randomly different.
+        let original = tree.appendingPathComponent("original.png")
+        let copy = tree.appendingPathComponent("copy.png")
+        let tweaked = tree.appendingPathComponent("tweaked.png")
+        try writeNoisyPNG(to: original, seed: 42, tweak: false)
+        try writeNoisyPNG(to: copy, seed: 42, tweak: false)
+        try writeNoisyPNG(to: tweaked, seed: 42, tweak: true)
+
+        let bridge = CzkawkaBridge(engineURL: Self.realEngineURL)
+        let strict = try await bridge.results(tool: .similarImages, in: [tree], imageMaxDifference: 0)
+        let loose = try await bridge.results(tool: .similarImages, in: [tree], imageMaxDifference: 20)
+
+        // The property that makes the slider mean anything: nothing may be reported with a
+        // difference above the threshold it was asked for.
+        func differences(_ items: [CzkawkaItem]) -> [Int] {
+            items.compactMap { item in
+                guard case .similarImage(_, _, let difference) = item.detail else { return nil }
+                return difference
+            }
+        }
+
+        #expect(strict.count >= 2, "identical copies must always pair up, got \(strict.count)")
+        #expect(differences(strict).allSatisfy { $0 == 0 }, "threshold 0 means identical only")
+        #expect(differences(loose).allSatisfy { $0 <= 20 }, "threshold 20 means 20 or closer")
+        #expect(loose.count >= strict.count, "a looser threshold can never find fewer matches")
+        #expect(loose.contains { $0.path.hasSuffix("tweaked.png") },
+                "the changed copy is only visible once the threshold allows it")
+        // Nothing is ever written to: all three files survive.
+        for url in [original, copy, tweaked] {
+            #expect(FileManager.default.fileExists(atPath: url.path))
+        }
+        #expect(tempScanDirs().isEmpty)
+    }
+
+    /// PNG of deterministic noise, optionally with a quarter-width white block: measurable by a
+    /// perceptual hash instead of randomly close to it.
+    private func writeNoisyPNG(to url: URL, seed: UInt64, tweak: Bool) throws {
+        let side = 128
+        var state = seed
+        func nextByte() -> UInt8 {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return UInt8((state >> 33) & 0xFF)
+        }
+
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        for index in 0..<pixels.count {
+            pixels[index] = nextByte()
+        }
+        if tweak {
+            let blockSide = side / 4
+            for row in 0..<blockSide {
+                for column in 0..<blockSide {
+                    let offset = (row * side + column) * 4
+                    pixels[offset] = 255
+                    pixels[offset + 1] = 255
+                    pixels[offset + 2] = 255
+                    pixels[offset + 3] = 255
+                }
+            }
+        }
+
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: side,
+            pixelsHigh: side,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: side * 4,
+            bitsPerPixel: 32
+        )
+        let bitmap = try #require(rep)
+        pixels.withUnsafeBufferPointer { buffer in
+            bitmap.bitmapData?.update(from: buffer.baseAddress!, count: pixels.count)
+        }
+        let png = try #require(bitmap.representation(using: .png, properties: [:]))
+        try png.write(to: url)
     }
 
     @Test("real engine: cancelling mid-scan leaves no orphan and no temp files", .enabled(if: engineAvailable))
