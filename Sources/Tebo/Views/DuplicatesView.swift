@@ -20,6 +20,13 @@ struct DuplicatesView: View {
     @State private var scannedMaxDifference: Int?
     /// Raised when a setting changed and the shared scan path should run again.
     @State private var requestScan = false
+    @Environment(WorkspaceActivity.self) private var activity
+
+    init(initialTool: CzkawkaTool = .duplicates) {
+        _tool = State(initialValue: initialTool)
+    }
+
+    private var tabID: String { tool == .duplicates ? "duplicates" : "media-\(tool.rawValue)" }
 
     private static let offeredTools: [CzkawkaTool] = [
         .duplicates, .similarImages, .similarMusic, .similarVideos,
@@ -34,8 +41,8 @@ struct DuplicatesView: View {
     var body: some View {
         let engine = appState.engine
         ScanTab(
-            tabID: "duplicates",
-            title: "Duplicates",
+            tabID: tabID,
+            title: tool.displayName,
             subtitle: "Exact duplicates by hash, plus similar images, music and video",
             icon: "photo.on.rectangle.angled",
             recommendedExplanation: Self.groupedTools.contains(tool)
@@ -56,19 +63,22 @@ struct DuplicatesView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    controls
+                    controls.disabled(activity.isScanning)
                     if tool == .similarImages {
-                        similarityThreshold
+                        similarityThreshold.disabled(activity.isScanning)
                     }
                 }
             }
         )
+        .onAppear { restoreMediaDetails() }
+        .onChange(of: tool) { _, _ in appState.clearSelection(); restoreMediaDetails() }
     }
 
     // MARK: Controls
 
     private var controls: some View {
-        HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
+          HStack(spacing: 10) {
             Picker("Tool", selection: $tool) {
                 ForEach(Self.offeredTools, id: \.self) { candidate in
                     Text(candidate.displayName).tag(candidate)
@@ -89,11 +99,12 @@ struct DuplicatesView: View {
                 .help(layout.help)
             }
 
-            Spacer(minLength: 8)
-
+          }
+          HStack(spacing: 10) {
             Button("Choose folder…") { chooseRoot() }
             TeboPath(path: root)
-                .frame(maxWidth: 260)
+            Spacer(minLength: 8)
+          }
         }
     }
 
@@ -144,7 +155,7 @@ struct DuplicatesView: View {
 
     private func runScan(engine: EngineStatus) async -> [ScanResult] {
         guard case .ready(let engineURL, _, _) = engine else {
-            appState.setScanNote("Engine not available: nothing was scanned.", for: "duplicates")
+            appState.setScanNote("Engine not available: nothing was scanned.", for: tabID)
             return []
         }
         let bridge = CzkawkaBridge(engineURL: engineURL)
@@ -179,6 +190,8 @@ struct DuplicatesView: View {
         scannedMaxDifference = threshold
         appState.groupByRowID = groups
         appState.mediaDetailByRowID = details
+        activity.groupsByTab[tabID] = groups
+        activity.detailsByTab[tabID] = details
 
         // "Recommended" is decided here, where the groups are known: every copy except the
         // largest of its group, so a whole album collapses to one file per set.
@@ -195,20 +208,25 @@ struct DuplicatesView: View {
         }
 
         if let failure {
-            appState.setScanNote(failure, for: "duplicates")
+            appState.setScanNote(failure, for: tabID)
         } else {
             let groupCount = Set(groups.values).count
             appState.setScanNote(
                 groupCount > 0
                     ? "\(rows.count) items in \(groupCount) groups across \(TeboPath.abbreviate(root))"
                     : "\(rows.count) items across \(TeboPath.abbreviate(root))",
-                for: "duplicates"
+                for: tabID
             )
         }
         return rows
     }
 
     // MARK: Actions
+
+    private func restoreMediaDetails() {
+        appState.groupByRowID = activity.groupsByTab[tabID] ?? [:]
+        appState.mediaDetailByRowID = activity.detailsByTab[tabID] ?? [:]
+    }
 
     private func chooseRoot() {
         let panel = NSOpenPanel()

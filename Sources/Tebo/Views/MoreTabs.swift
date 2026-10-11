@@ -32,6 +32,10 @@ struct ToolboxView: View {
     @State private var fixerTool: CzkawkaTool = .invalidSymlinks
     @State private var fixerRoot: String = NSHomeDirectory()
 
+    init(initialTool: String = "Purge") {
+        _selectedTool = State(initialValue: Tool(rawValue: initialTool) ?? .purge)
+    }
+
     var body: some View {
         // Snapshot the whitelist now (Sendable value for the async scans).
         let whitelist = appState.whitelist
@@ -202,7 +206,8 @@ struct SettingsView: View {
             // The dry-run switch lives in the toolbar: one control for one state, always visible.
             Section("Safety") {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Dry-run is the toolbar switch. On: every scan is a preview, nothing is deleted.")
+                    Toggle("Preview only", isOn: Binding(get: { appState.dryRunEnabled }, set: { appState.dryRunEnabled = $0 }))
+                    Text("On: every scan is a preview, nothing is deleted.")
                     Text("Off: removals move files to the Trash and are logged to ~/Library/Logs/tebo/operations.log.")
                 }
                 .font(.callout)

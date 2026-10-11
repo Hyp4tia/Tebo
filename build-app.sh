@@ -26,7 +26,17 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$BIN" "$APP/Contents/MacOS/Tebo"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+cp Resources/Tebo.icns Resources/TeboLogo.png Resources/NOTICE.md "$APP/Contents/Resources/"
 cp Resources/whitelist.default "$APP/Contents/Resources/" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Tebo" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.tebo.app" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleName Tebo" "$APP/Contents/Info.plist"
+RESOURCE_BUNDLE=".build/$MODE/Tebo_Tebo.bundle"
+if [[ -d "$RESOURCE_BUNDLE" ]]; then
+  cp -R "$RESOURCE_BUNDLE" "$APP/Contents/Resources/"
+fi
 
-echo "Built $APP — opening…"
-open "$APP"
+echo "Built $APP"
+if [[ "${TEBO_NO_OPEN:-0}" != "1" ]]; then
+  open "$APP"
+fi

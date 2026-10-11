@@ -29,11 +29,11 @@ struct TeboApp: App {
         WindowGroup {
             ContentView()
                 .environment(appState) // Inject for all child views
-                .frame(minWidth: 1020, minHeight: 680)
+                .frame(minWidth: 1120, minHeight: 740)
         }
         // Roomy default so tabs + stats + bottom bar never clip on launch.
         // contentMinSize stops the window shrinking below our min size.
-        .defaultSize(width: 1240, height: 800)
+        .defaultSize(width: 1352, height: 824)
         .windowResizability(.contentMinSize)
         // The app draws its own nav bar, so the title bar is hidden rather than duplicated.
         .windowStyle(.hiddenTitleBar)

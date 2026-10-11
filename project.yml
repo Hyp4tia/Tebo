@@ -29,6 +29,8 @@ targets:
       - path: Sources/Tebo
       - path: Resources/Tebo.icns
         buildPhase: resources
+      - path: Resources/TeboLogo.png
+        buildPhase: resources
       - path: Resources/NOTICE.md
         buildPhase: resources
       - path: Resources/whitelist.default

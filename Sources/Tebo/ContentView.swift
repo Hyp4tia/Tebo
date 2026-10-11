@@ -1,179 +1,212 @@
 import AppKit
 import SwiftUI
 
-// MARK: - ContentView
-// Window shell for the six tabs. The chrome is ours (a floating pill bar over a hidden title bar)
-// so the whole top edge can carry state: navigation on the left, the one delete-behaviour control
-// on the right, and nothing competing for the same pixels.
-
-enum TeboSection: String, CaseIterable, Identifiable {
-    case clean, duplicates, apps, disk, health, toolbox
-
+enum CleanupWorkspace: String, CaseIterable, Identifiable {
+    case files = "File cleanup"
+    case images = "image cleanup"
     var id: String { rawValue }
+    var pages: [WorkspacePage] {
+        self == .files
+            ? [.systemJunk, .largeFiles, .duplicates, .downloads, .applications, .archives]
+            : [.similarImages, .duplicates, .similarVideos, .similarMusic, .emptyFolders, .emptyFiles]
+    }
+}
 
+enum WorkspacePage: String, Identifiable {
+    case overview, systemJunk, largeFiles, duplicates, downloads, applications, archives
+    case similarImages, similarVideos, similarMusic, emptyFolders, emptyFiles
+    case autoClean, health, toolbox
+    var id: String { rawValue }
     var title: String {
         switch self {
-        case .clean: "Clean"
+        case .overview: "Overview"
+        case .systemJunk: "System Junk"
+        case .largeFiles: "Large Files"
         case .duplicates: "Duplicates"
-        case .apps: "Apps"
-        case .disk: "Disk"
+        case .downloads: "Downloads"
+        case .applications: "Applications"
+        case .archives: "Archives"
+        case .similarImages: "Similar Images"
+        case .similarVideos: "Similar Videos"
+        case .similarMusic: "Similar Music"
+        case .emptyFolders: "Empty Folders"
+        case .emptyFiles: "Empty Files"
+        case .autoClean: "Auto Clean"
         case .health: "Health"
         case .toolbox: "Toolbox"
         }
     }
-
     var symbol: String {
         switch self {
-        case .clean: "sparkles"
-        case .duplicates: "photo.on.rectangle.angled"
-        case .apps: "app.badge"
-        case .disk: "internaldrive"
-        case .health: "heart.text.square"
+        case .overview: "house"
+        case .systemJunk: "trash"
+        case .largeFiles, .emptyFolders: "folder"
+        case .duplicates: "square.on.square"
+        case .downloads: "arrow.down.to.line"
+        case .applications: "app.badge"
+        case .archives: "archivebox"
+        case .similarImages: "photo.on.rectangle"
+        case .similarVideos: "film"
+        case .similarMusic: "music.note"
+        case .emptyFiles: "doc"
+        case .autoClean: "clock.arrow.circlepath"
+        case .health: "heart"
         case .toolbox: "wrench.and.screwdriver"
         }
     }
-
-    var help: String {
+    var detail: String {
         switch self {
-        case .clean: "Caches, logs and leftovers, biggest first"
-        case .duplicates: "Duplicate and similar files, with previews"
-        case .apps: "What removed apps left behind"
-        case .disk: "What is using the space"
-        case .health: "Memory, load and maintenance"
-        case .toolbox: "Installers, broken files and the operation log"
+        case .systemJunk: "Caches, logs, temporary files"
+        case .largeFiles: "Find the files taking up space"
+        case .duplicates: "Exact duplicates by file content"
+        case .downloads: "Installer downloads"
+        case .applications: "Unused app data"
+        case .archives: "DMG, PKG, ISO and XIP installers"
+        case .similarImages: "Find visually similar images"
+        case .similarVideos: "Compare similar video files"
+        case .similarMusic: "Find matching music files"
+        case .emptyFolders: "Folders with nothing inside"
+        case .emptyFiles: "Files with no content"
+        default: ""
+        }
+    }
+    var tabID: String? {
+        switch self {
+        case .systemJunk: "clean"
+        case .largeFiles: "disk"
+        case .duplicates: "duplicates"
+        case .applications: "apps"
+        case .archives: "installer"
+        case .similarImages: "media-image"
+        case .similarVideos: "media-video"
+        case .similarMusic: "media-music"
+        case .emptyFolders: "media-empty-folders"
+        case .emptyFiles: "media-empty-files"
+        default: nil
+        }
+    }
+    var tint: Color {
+        switch self {
+        case .systemJunk: TeboPalette.mint
+        case .largeFiles, .emptyFolders: TeboPalette.blue
+        case .duplicates, .similarImages: TeboPalette.purple
+        case .downloads, .similarVideos: TeboPalette.orange
+        case .applications, .similarMusic: TeboPalette.violet
+        default: TeboPalette.ink
         }
     }
 }
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
-
-    @State private var section: TeboSection = .clean
+    @State private var workspace: CleanupWorkspace = .files
+    @State private var page: WorkspacePage = .overview
+    @State private var search = ""
+    @State private var showPermissions = false
+    @State private var activity = WorkspaceActivity()
 
     var body: some View {
-        VStack(spacing: 0) {
-            if appState.hasFullDiskAccess == false {
+        GeometryReader { geometry in
+            let scale = min(1, geometry.size.width / TeboPalette.referenceWidth)
+            HStack(spacing: 0) {
+                WorkspaceSidebar(workspace: $workspace, page: $page, activity: activity)
+                    .frame(width: TeboPalette.sidebarWidth * scale)
+                Rectangle().fill(TeboPalette.line).frame(width: 1)
+                center.frame(maxWidth: .infinity, maxHeight: .infinity)
+                Rectangle().fill(TeboPalette.line).frame(width: 1)
+                WorkspaceInspector(search: $search, page: $page, activity: activity,
+                                   compact: geometry.size.height < 790)
+                    .frame(width: TeboPalette.inspectorWidth * scale)
+            }
+            .background(TeboPalette.canvas)
+        }
+        .frame(minWidth: 1120, minHeight: 740)
+        .ignoresSafeArea(.container, edges: .top)
+        .foregroundStyle(TeboPalette.ink)
+        .tint(TeboPalette.ink)
+        .preferredColorScheme(.light)
+        .environment(activity)
+        .environment(\.workspaceSearch, search)
+        .onChange(of: workspace) { _, _ in page = .overview; search = "" }
+        .onChange(of: page) { _, _ in appState.clearSelection(); search = "" }
+        .task { await appState.refreshTooling() }
+        .sheet(isPresented: $showPermissions) {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    Text("Disk access").font(.title2.weight(.semibold))
+                    Spacer()
+                    Button("Done") { showPermissions = false }
+                }
                 PermissionsBanner()
             }
-
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(24)
+            .frame(width: 620)
         }
-        // The bar floats over the page rather than pushing it down: scroll views keep drawing
-        // underneath it, which is what gives the material something to blur.
-        .safeAreaInset(edge: .top, spacing: 0) { navBar }
-        .frame(minWidth: 1040, minHeight: 680)
-        .background(Color(nsColor: .windowBackgroundColor))
-        // Engine verification and the permission probe each cost a disk read: once per launch.
-        .task { await appState.refreshTooling() }
     }
 
-    // MARK: Nav bar
-
-    private var navBar: some View {
-        HStack(spacing: 8) {
-            // The traffic lights float over this bar; leave the room they need.
-            Color.clear.frame(width: 72, height: 1)
-
-            HStack(spacing: 6) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 20, height: 20)
-                Text("Tebo")
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .padding(.trailing, 10)
-
-            ForEach(TeboSection.allCases) { candidate in
-                TeboPill(
-                    title: candidate.title,
-                    systemImage: candidate.symbol,
-                    isActive: section == candidate,
-                    helpText: candidate.help
-                ) {
-                    section = candidate
+    @ViewBuilder private var center: some View {
+        VStack(spacing: 0) {
+            if page == .overview {
+                OverviewView(workspace: workspace, search: search) { page = $0 }
+            } else {
+                HStack {
+                    Button { page = .overview } label: { Label("Overview", systemImage: "arrow.left") }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12))
+                        .foregroundStyle(TeboPalette.secondary)
+                    Spacer()
+                    Text(workspace.rawValue).font(.system(size: 11)).foregroundStyle(TeboPalette.secondary)
                 }
+                .padding(.horizontal, 28)
+                .padding(.top, 38)
+                .padding(.bottom, 14)
+                detail.id(page).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-
-            Spacer(minLength: 12)
-
-            previewControl
-            settingsButton
         }
-        .padding(.horizontal, 14)
-        .frame(height: 52)
-        .background { WindowDragArea() }
-        // The glass comes from the platform material, not from a hand-rolled colour: the bar
-        // stays legible over whatever scrolls behind it.
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.primary.opacity(0.10)).frame(height: 1)
+        .overlay(alignment: .topTrailing) {
+            if appState.hasFullDiskAccess == false {
+                Button { showPermissions = true } label: { Image(systemName: "lock.shield").font(.system(size: 13)) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(TeboPalette.secondary)
+                    .padding(16)
+                    .help("Full Disk Access is off. Click for access settings.")
+                    .accessibilityLabel("Disk access settings")
+            }
         }
     }
 
-    /// One control for delete behaviour, labelled so its state is readable at a glance.
-    private var previewControl: some View {
-        HStack(spacing: 7) {
-            Toggle("", isOn: Binding(
-                get: { appState.dryRunEnabled },
-                set: { appState.dryRunEnabled = $0 }
-            ))
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .labelsHidden()
-            .fixedSize()
-
-            Text(appState.dryRunEnabled ? "Preview" : "Deleting")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(appState.dryRunEnabled ? Color.secondary : Color.orange)
-                .fixedSize()
-        }
-        .help(appState.dryRunEnabled
-              ? "Preview is on: a scan only reports. Nothing is deleted."
-              : "Preview is off: ticking rows and confirming moves them to the Trash. Reversible from the Trash.")
-    }
-
-    private var settingsButton: some View {
-        SettingsLink {
-            Image(systemName: "gearshape")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-        }
-        .buttonStyle(.plain)
-        .help("Settings")
-    }
-
-    // MARK: Tab content
-
-    @ViewBuilder
-    private var content: some View {
-        switch section {
-        case .clean: CleanView()
+    @ViewBuilder private var detail: some View {
+        switch page {
+        case .systemJunk: CleanView()
+        case .largeFiles: DiskView()
+        case .applications: AppsView()
         case .duplicates: DuplicatesView()
-        case .apps: AppsView()
-        case .disk: DiskView()
+        case .similarImages: DuplicatesView(initialTool: .similarImages)
+        case .similarVideos: DuplicatesView(initialTool: .similarVideos)
+        case .similarMusic: DuplicatesView(initialTool: .similarMusic)
+        case .emptyFolders: DuplicatesView(initialTool: .emptyFolders)
+        case .emptyFiles: DuplicatesView(initialTool: .emptyFiles)
+        case .archives: ToolboxView(initialTool: "Installers")
         case .health: HealthView()
         case .toolbox: ToolboxView()
+        case .downloads:
+            UnavailableTab(title: "Downloads", subtitle: "A little room for a fresh start", icon: "arrow.down.to.line",
+                           reason: "General download cleanup is not available yet. Use Archives to review installer downloads.")
+        case .autoClean:
+            UnavailableTab(title: "Auto Clean", subtitle: "Keep your Mac feeling light", icon: "clock.arrow.circlepath",
+                           reason: "Scheduled cleaning is not available yet. Every existing scan is started by you.")
+        case .overview: EmptyView()
         }
     }
 }
 
-// MARK: - WindowDragArea
-
-/// macOS 14 has no `WindowDragGesture`, so the nav bar drags the window through AppKit:
-/// anywhere without a control drags, and double-click zooms, like a title bar should.
 struct WindowDragArea: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { DragView() }
-
     func updateNSView(_ nsView: NSView, context: Context) {}
-
     private final class DragView: NSView {
         override func mouseDown(with event: NSEvent) {
-            if event.clickCount == 2 {
-                window?.zoom(nil)
-            } else {
-                window?.performDrag(with: event)
-            }
+            if event.clickCount == 2 { window?.zoom(nil) }
+            else { window?.performDrag(with: event) }
         }
     }
 }

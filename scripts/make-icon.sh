@@ -2,7 +2,7 @@
 # make-icon.sh — builds Resources/Tebo.icns from scripts/make-icon.swift.
 #
 # Usage: ./scripts/make-icon.sh
-# Swap the mark by editing the symbol list / gradient in make-icon.swift, then re-run this.
+# Uses Resources/TeboLogoSource.png, the logo supplied by the user.
 # The .icns is committed so a plain `xcodegen generate` build has an icon without re-running this.
 
 set -euo pipefail
@@ -12,7 +12,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 BASE="$WORK/icon-1024.png"
-swift scripts/make-icon.swift "$BASE"
+swift -module-cache-path "$WORK/module-cache" scripts/make-icon.swift "$BASE"
 
 ICONSET="$WORK/Tebo.iconset"
 mkdir -p "$ICONSET"
