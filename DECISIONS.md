@@ -96,3 +96,19 @@ the original logo and ICNS remain unchanged.
 Consequences: this refines UI-001's original palette and depth. It does not adopt
 the alternative Mole top-navigation concepts. See [DESIGN.md](DESIGN.md) and
 [the implementation record](.hermes/plans/2026-10-12_skeuomorphic-preview.md).
+
+## MEDIA-001: native Krokiet workflows in Media cleanup
+
+Date: 2026-10-12. Source: the user's rename request and instruction to create
+Krokiet integration after committing the existing redesign checkpoint.
+
+Choice: reuse the verified Czkawka core for all 14 tool families, expose native
+scan controls and protected references, and group them into six pages within the
+approved shell. EXIF cleanup and video transforms export new copies through
+ImageIO and ffmpeg. Original rewrites and engine fix/delete flags stay excluded.
+
+Rationale: Krokiet is a frontend for the core already bundled with Tebo. This
+keeps one scanner contract, native navigation and the existing safety boundaries.
+Name/extension corrections and invalid links remain review-only where original
+mutation would conflict with those boundaries. See [the feature map](docs/MEDIA-FEATURES.md)
+and [task record](.hermes/plans/2026-10-12_krokiet-media-workspace.md).

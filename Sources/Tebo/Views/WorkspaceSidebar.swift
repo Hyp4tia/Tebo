@@ -29,7 +29,7 @@ struct WorkspaceSidebar: View {
                     ForEach(workspace.pages) { navigationRow($0, compact: compact) }
                     Rectangle().fill(TeboPalette.line).frame(height: 1)
                         .padding(.horizontal, 6).padding(.top, compact ? 12 : 17).padding(.bottom, compact ? 6 : 12)
-                    navigationRow(workspace == .files ? .history : .autoClean, chevron: true, compact: compact)
+                    navigationRow(.history, chevron: true, compact: compact)
                     SettingsLink {
                         HStack(spacing: 16) {
                             Image(systemName: "gearshape").font(.system(size: 19)).frame(width: 24)
@@ -92,9 +92,10 @@ struct WorkspaceSidebar: View {
                 Spacer(minLength: 2)
                 if chevron {
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .light))
-                } else if let key = destination.tabID, appState.resultsByTab[key] != nil {
-                    Text((appState.results(for: key).contains { !$0.isSizeComplete } ? "≥ " : "")
-                         + TeboBytes.text(appState.results(for: key).reduce(0) { $0 + $1.sizeBytes }))
+                } else if destination.resultTabIDs.contains(where: { appState.resultsByTab[$0] != nil }) {
+                    let rows = appState.results(forTabs: destination.resultTabIDs)
+                    Text((rows.contains { !$0.isSizeComplete } ? "≥ " : "")
+                         + TeboBytes.text(rows.reduce(0) { $0 + $1.sizeBytes }))
                         .font(.system(size: 11.5)).monospacedDigit().foregroundStyle(TeboPalette.secondary)
                         .lineLimit(1).minimumScaleFactor(0.82)
                 }

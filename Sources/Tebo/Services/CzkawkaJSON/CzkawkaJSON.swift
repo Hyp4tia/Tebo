@@ -77,7 +77,7 @@ public enum CzkawkaJSON {
             try forEachFolder(in: object, body)
         case .bigFiles, .emptyFiles, .temporaryFiles:
             try forEachFile(in: object, tool: tool, body)
-        case .invalidSymlinks, .brokenFiles, .wrongExtensions, .badNames:
+        case .invalidSymlinks, .brokenFiles, .wrongExtensions, .badNames, .exifMetadata, .videoTranscode, .videoCrop:
             try forEachInspectedFile(in: object, tool: tool, body)
         case .similarImages, .similarMusic, .similarVideos:
             try forEachGroup(in: object, tool: tool, body)
@@ -226,7 +226,8 @@ public enum CzkawkaJSON {
             sizeBytes: int64(entry["size"]) ?? 0,
             tool: .duplicates,
             groupID: groupID,
-            detail: .duplicate(hash: hash)
+            detail: .duplicate(hash: hash),
+            modifiedSeconds: double(entry["modified_date"])
         )
     }
 
@@ -261,7 +262,7 @@ public enum CzkawkaJSON {
         }
         for raw in files {
             guard let entry = raw as? [String: Any], let path = string(entry["path"]) else { continue }
-            try body(CzkawkaItem(path: path, sizeBytes: int64(entry["size"]) ?? 0, tool: tool))
+            try body(CzkawkaItem(path: path, sizeBytes: int64(entry["size"]) ?? 0, tool: tool, modifiedSeconds: double(entry["modified_date"])))
         }
     }
 
@@ -297,10 +298,20 @@ public enum CzkawkaJSON {
                 )
             case .badNames:
                 detail = .badName(suggested: string(entry["new_name"]) ?? "")
+            case .exifMetadata:
+                let tags = entry["exif_tags"] as? [[String: Any]] ?? []
+                detail = .exifMetadata(tags: tags.compactMap { string($0["name"]) })
+            case .videoTranscode, .videoCrop:
+                let bounds = entry["new_image_dimensions"] as? [Int]
+                let crop = bounds.flatMap { $0.count == 4 ? MediaCropBounds(left: $0[0], top: $0[1], right: $0[2], bottom: $0[3]) : nil }
+                let width = int(entry["width"]) ?? 0, height = int(entry["height"]) ?? 0
+                guard entry["error"] is NSNull || entry["error"] == nil,
+                      tool != .videoCrop || crop?.isValid(width: width, height: height) == true else { continue }
+                detail = .videoOptimization(width: width, height: height, codec: string(entry["codec"]) ?? "", crop: crop)
             default:
                 return
             }
-            try body(CzkawkaItem(path: path, sizeBytes: size, tool: tool, detail: detail))
+            try body(CzkawkaItem(path: path, sizeBytes: size, tool: tool, detail: detail, modifiedSeconds: double(entry["modified_date"])))
         }
     }
 
@@ -355,7 +366,7 @@ public enum CzkawkaJSON {
         default:
             return nil
         }
-        return CzkawkaItem(path: path, sizeBytes: size, tool: tool, groupID: groupID, detail: detail)
+        return CzkawkaItem(path: path, sizeBytes: size, tool: tool, groupID: groupID, detail: detail, modifiedSeconds: double(entry["modified_date"]))
     }
 
     // MARK: JSON number coercion (JSONSerialization hands back NSNumber everywhere)

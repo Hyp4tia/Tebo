@@ -109,6 +109,11 @@ final class AppState {
         resultsByTab[tab] ?? []
     }
 
+    func results(forTabs tabs: [String]) -> [ScanResult] {
+        var seen: Set<String> = []
+        return tabs.flatMap { results(for: $0) }.filter { seen.insert($0.path).inserted }
+    }
+
     /// Advisory rows for one tab.
     func advisories(for tab: String) -> [AdvisoryRow] {
         advisoriesByTab[tab] ?? []

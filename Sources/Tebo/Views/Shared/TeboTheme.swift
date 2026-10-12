@@ -131,6 +131,8 @@ final class WorkspaceActivity {
     var trashedCount = 0
     var groupsByTab: [String: [UUID: String]] = [:]
     var detailsByTab: [String: [UUID: CzkawkaItemDetail]] = [:]
+    var mediaSnapshotsByTab: [String: [UUID: MediaFileSnapshot]] = [:]
+    var mediaReferenceGuardsByTab: [String: [UUID: [String: MediaFileSnapshot]]] = [:]
     var identitiesByTab: [String: [String: FileIdentity]] = [:]
 
     var durationText: String {

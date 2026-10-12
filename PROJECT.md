@@ -11,7 +11,9 @@ recovered from the Trash. Source: [README.md](README.md), opening and safety mod
 
 File cleanup covers Mole's Clean, Uninstall, Optimize, Analyze, Status and
 Project Cleanup workflows. Downloaded installers are included in Clean; Project
-Cleanup adapts Mole's Purge command. Media cleanup retains its engine-backed analysis tools.
+Cleanup adapts Mole's Purge command. Media cleanup adapts Krokiet’s tool families through the verified Czkawka core,
+with native comparison controls, file checks and copy exports.
+[The media feature map](docs/MEDIA-FEATURES.md) owns its supported behavior and limits.
 See [README.md](README.md#what-it-does) for each tab's scope instead of maintaining
 another feature table here. App code lives in `Sources/Tebo/`; tests in `Tests/`;
 helper notes in `Engines/`; assets and bundle configuration in `Resources/`.

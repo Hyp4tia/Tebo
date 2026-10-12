@@ -1,240 +1,84 @@
 import AppKit
 import SwiftUI
 
-// MARK: - DuplicatesView (czkawka: duplicates + similar media)
-// Runs the bundled engine on a folder the user picks, streams findings, and shows them as a list,
-// as thumbnails side by side, or as the closest pair per group. The engine is invoked read-only:
-// it never sees a delete flag from us.
-
+/// Native Krokiet scan workflows, using the same bundled core as its upstream frontend.
 struct DuplicatesView: View {
     @Environment(AppState.self) private var appState
-
-    @State private var tool: CzkawkaTool = .duplicates
-    /// Where the engine looks. Home by default: these tools are slow on huge trees, so the user
-    /// narrows it deliberately rather than us scanning everything.
-    @State private var root: String = NSHomeDirectory()
-    @State private var layout: DuplicateLayout = .list
-    /// The engine's own strictness for similar images (`-s`, max difference). 5 is its default.
-    @State private var imageMaxDifference = 5
-    /// What the rows on screen were produced with, so the UI can say when a re-scan is due.
-    @State private var scannedMaxDifference: Int?
-    /// Raised when a setting changed and the shared scan path should run again.
-    @State private var requestScan = false
     @Environment(WorkspaceActivity.self) private var activity
+    @State private var tool: CzkawkaTool
+    @State private var settings = MediaSettingsStore.load()
+    @State private var layout: DuplicateLayout = .list
+    let offeredTools: [CzkawkaTool]
 
-    init(initialTool: CzkawkaTool = .duplicates) {
-        _tool = State(initialValue: initialTool)
+    init(initialTool: CzkawkaTool = .duplicates, tools: [CzkawkaTool]? = nil) {
+        _tool = State(initialValue: initialTool); offeredTools = tools ?? [initialTool]
     }
-
-    private var tabID: String { tool == .duplicates ? "duplicates" : "media-\(tool.rawValue)" }
-
-    private static let offeredTools: [CzkawkaTool] = [
-        .duplicates, .similarImages, .similarMusic, .similarVideos,
-        .emptyFolders, .emptyFiles, .temporaryFiles, .bigFiles,
-    ]
-
-    /// Layouts only make sense where the engine reports groups of files.
-    private static let groupedTools: Set<CzkawkaTool> = [
-        .duplicates, .similarImages, .similarVideos, .similarMusic,
-    ]
-
     var body: some View {
-        let engine = appState.engine
-        ScanTab(
-            tabID: tabID,
-            title: tool.displayName,
-            subtitle: "Exact duplicates by hash, plus similar images, music and video",
-            icon: "photo.on.rectangle.angled",
-            recommendedExplanation: Self.groupedTools.contains(tool)
-                ? "Ticks every copy in a group except the largest one, which stays."
-                : nil,
-            rowsOverride: { rows in
-                AnyView(DuplicateRowsView(layout: layout, tool: tool, rows: rows))
-            },
-            rescanRequested: $requestScan,
-            runScan: { await runScan(engine: engine) },
-            extraInfo: {
-                VStack(alignment: .leading, spacing: 10) {
-                    if !engine.isReady {
-                        HStack(spacing: 8) {
-                            TeboBadge(text: "Engine missing", systemImage: "exclamationmark.triangle", tint: .orange)
-                            Text(engine.summary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+        let selectedTool = tool, configuration = settings, engine = appState.engine, whitelist = appState.whitelist
+        let snapshots = Dictionary(appState.results(for: tool.tabID).compactMap { row in
+            activity.mediaSnapshotsByTab[tool.tabID]?[row.id].map { (row.path, $0) }
+        }, uniquingKeysWith: { a, _ in a })
+        let referenceGuards = Dictionary(appState.results(for: tool.tabID).compactMap { row in
+            activity.mediaReferenceGuardsByTab[tool.tabID]?[row.id].map { (row.path, $0) }
+        }, uniquingKeysWith: { a, _ in a })
+        ScanTab(tabID: tool.tabID, title: tool.displayName, subtitle: subtitle, icon: tool.symbol,
+                scanScope: settings.scope,
+                recommendedExplanation: tool.isGrouped ? "Review every group. Suggestions keep the largest copy, or keep reference-folder originals. Name and size matches have no default selection." : nil,
+                rowsOverride: { AnyView(DuplicateRowsView(layout: tool.isGrouped ? layout : .list, tool: tool, rows: $0)) },
+                removalValidator: { path in MediaScanService.removalReason(path: path, tool: selectedTool, settings: configuration, expected: snapshots[path], referenceGuard: referenceGuards[path]) },
+                runScan: {
+                    guard case .ready(let engineURL, _, _) = engine else {
+                        appState.setScanNote("Engine unavailable: " + engine.summary, for: selectedTool.tabID); return []
+                    }
+                    if selectedTool == .similarVideos, appState.ffmpegPath == nil {
+                        appState.setScanNote("Similar video scanning requires ffmpeg. Nothing was scanned.", for: selectedTool.tabID); return []
+                    }
+                    do {
+                        let report = try await MediaScanService(engineURL: engineURL).scan(tool: selectedTool, settings: configuration, whitelist: whitelist)
+                        try Task.checkCancellation()
+                        appState.groupByRowID = report.groups; appState.mediaDetailByRowID = report.details
+                        activity.groupsByTab[selectedTool.tabID] = report.groups; activity.detailsByTab[selectedTool.tabID] = report.details
+                        activity.mediaSnapshotsByTab[selectedTool.tabID] = report.snapshots
+                        activity.mediaReferenceGuardsByTab[selectedTool.tabID] = report.referenceGuards
+                        appState.advisoriesByTab[selectedTool.tabID] = report.kept
+                        let groups = Set(report.groups.values).count
+                        appState.setScanNote("\(report.rows.count) selectable items\(groups > 0 ? " in \(groups) groups" : ""). Reference and protected entries stay kept.", for: selectedTool.tabID)
+                        return report.rows
+                    } catch {
+                        guard !Task.isCancelled else { return [] }
+                        appState.setScanNote("Scan failed: " + error.localizedDescription, for: selectedTool.tabID); return []
+                    }
+                }, extraInfo: {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if !engine.isReady { Text(engine.summary).font(.caption).foregroundStyle(.secondary) }
+                        if offeredTools.count > 1 {
+                            Picker("File check", selection: $tool) { ForEach(offeredTools, id: \.self) { Text($0.displayName).tag($0) } }
                         }
-                    }
-                    controls.disabled(activity.isScanning)
-                    if tool == .similarImages {
-                        similarityThreshold.disabled(activity.isScanning)
-                    }
-                }
-            }
-        )
-        .onAppear { restoreMediaDetails() }
-        .onChange(of: tool) { _, _ in appState.clearSelection(); restoreMediaDetails() }
+                        if tool.isGrouped {
+                            Picker("Result layout", selection: $layout) {
+                                ForEach(DuplicateLayout.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                            }.pickerStyle(.segmented).labelsHidden()
+                        }
+                        MediaScanControls(settings: $settings, tool: tool)
+                        ReviewPanel(note: appState.scanNote(for: tool.tabID), advisories: appState.advisories(for: tool.tabID))
+                    }.disabled(activity.isScanning)
+                })
+        .id(tool)
+        .onAppear { restoreDetails() }
+        .onChange(of: tool) { _, _ in appState.clearSelection(); restoreDetails() }
+        .onChange(of: settings) { _, value in MediaSettingsStore.save(value) }
     }
-
-    // MARK: Controls
-
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-          HStack(spacing: 10) {
-            Picker("Tool", selection: $tool) {
-                ForEach(Self.offeredTools, id: \.self) { candidate in
-                    Text(candidate.displayName).tag(candidate)
-                }
-            }
-            .labelsHidden()
-            .frame(maxWidth: 240)
-
-            if Self.groupedTools.contains(tool) {
-                Picker("Layout", selection: $layout) {
-                    ForEach(DuplicateLayout.allCases) { candidate in
-                        Label(candidate.title, systemImage: candidate.symbol).tag(candidate)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 320)
-                .help(layout.help)
-            }
-
-          }
-          HStack(spacing: 10) {
-            Button("Choose folder…") { chooseRoot() }
-            TeboPath(path: root)
-            Spacer(minLength: 8)
-          }
+    private var subtitle: String {
+        switch tool {
+        case .duplicates: "Compare files by content, size or name"
+        case .similarImages: "Compare perceptual hashes and review images side by side"
+        case .similarVideos: "Compare video frames or audio fingerprints"
+        case .similarMusic: "Compare audio fingerprints or music tags"
+        default: "Inspect the folders you choose, then review each finding"
         }
     }
-
-    /// The engine measures similarity as a difference score: lower is stricter. Exposing it means
-    /// the user decides how close "similar" has to be, instead of us picking a number for them.
-    private var similarityThreshold: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text("How similar counts as similar")
-                    .font(.callout.weight(.medium))
-                TeboBadge(
-                    text: "difference ≤ \(imageMaxDifference)",
-                    systemImage: "dial.medium",
-                    tint: .accentColor
-                )
-                Spacer()
-                if scannedMaxDifference != imageMaxDifference {
-                    Button("Scan again to apply") { requestScan = true }
-                        .buttonStyle(TeboButtonStyle())
-                        .controlSize(.small)
-                }
-            }
-
-            Slider(
-                value: Binding(
-                    get: { Double(imageMaxDifference) },
-                    set: { imageMaxDifference = Int($0.rounded()) }
-                ),
-                in: 0...40,
-                step: 1
-            )
-
-            HStack {
-                Text("0 = pixel-identical").font(.caption2).foregroundStyle(.tertiary)
-                Spacer()
-                Text("40 = loosely similar").font(.caption2).foregroundStyle(.tertiary)
-            }
-
-            Text("This is the engine's own measure. Its default is 5 and it recommends up to 10 for the hash size it uses here. Lower finds fewer, closer matches.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .teboCard(padding: 12)
-    }
-
-    // MARK: Scan
-
-    private func runScan(engine: EngineStatus) async -> [ScanResult] {
-        guard case .ready(let engineURL, _, _) = engine else {
-            appState.setScanNote("Engine not available: nothing was scanned.", for: tabID)
-            return []
-        }
-        let bridge = CzkawkaBridge(engineURL: engineURL)
-        let directory = URL(fileURLWithPath: root)
-        let threshold = tool == .similarImages ? imageMaxDifference : nil
-        var rows: [ScanResult] = []
-        var groups: [UUID: String] = [:]
-        var details: [UUID: CzkawkaItemDetail] = [:]
-        var failure: String?
-
-        do {
-            for try await item in bridge.scan(
-                tool: tool,
-                in: [directory],
-                imageMaxDifference: threshold
-            ) {
-                if let groupID = item.groupID { groups[item.id] = groupID }
-                if let detail = item.detail { details[item.id] = detail }
-                rows.append(ScanResult(
-                    id: item.id,
-                    path: item.path,
-                    sizeBytes: item.sizeBytes,
-                    category: item.category,
-                    reason: item.reason
-                ))
-            }
-        } catch {
-            // A failed scan must never look like an empty folder.
-            failure = "\(tool.displayName) scan failed: \(error.localizedDescription)"
-        }
-
-        scannedMaxDifference = threshold
-        appState.groupByRowID = groups
-        appState.mediaDetailByRowID = details
-        activity.groupsByTab[tabID] = groups
-        activity.detailsByTab[tabID] = details
-
-        // "Recommended" is decided here, where the groups are known: every copy except the
-        // largest of its group, so a whole album collapses to one file per set.
-        let keepers = SelectionPlan.keepersByGroup(rows: rows, groups: groups)
-        rows = rows.map { row in
-            ScanResult(
-                id: row.id,
-                path: row.path,
-                sizeBytes: row.sizeBytes,
-                category: row.category,
-                reason: row.reason,
-                recommendedForSelection: groups[row.id] != nil && !keepers.contains(row.id)
-            )
-        }
-
-        if let failure {
-            appState.setScanNote(failure, for: tabID)
-        } else {
-            let groupCount = Set(groups.values).count
-            appState.setScanNote(
-                groupCount > 0
-                    ? "\(rows.count) items in \(groupCount) groups across \(TeboPath.abbreviate(root))"
-                    : "\(rows.count) items across \(TeboPath.abbreviate(root))",
-                for: tabID
-            )
-        }
-        return rows
-    }
-
-    // MARK: Actions
-
-    private func restoreMediaDetails() {
-        appState.groupByRowID = activity.groupsByTab[tabID] ?? [:]
-        appState.mediaDetailByRowID = activity.detailsByTab[tabID] ?? [:]
-    }
-
-    private func chooseRoot() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = URL(fileURLWithPath: root)
-        panel.prompt = "Scan here"
-        if panel.runModal() == .OK, let picked = panel.url { root = picked.path }
+    private func restoreDetails() {
+        appState.groupByRowID = activity.groupsByTab[tool.tabID] ?? [:]
+        appState.mediaDetailByRowID = activity.detailsByTab[tool.tabID] ?? [:]
     }
 }

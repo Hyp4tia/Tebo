@@ -341,7 +341,7 @@ struct CzkawkaBridgeTests {
             #expect(args.first == tool.clapName, "subcommand must be the exact clap name")
             if tool == .duplicates {
                 #expect(args.contains("-s") && args.contains("SIZE_NAME"))
-            } else {
+            } else if tool != .videoCrop {
                 #expect(!args.contains("-s"), "\(tool.clapName) gets -s only through its own documented flag")
             }
             // bad-names checks are opt-in: without any of these the engine returns [].

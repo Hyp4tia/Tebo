@@ -70,12 +70,14 @@ The File cleanup workspace exposes **Clean, Uninstall, Optimize, Analyze, Status
 and Project Cleanup**, with History and protection settings. Clean includes
 downloaded installers; Project Cleanup adapts Mole's Purge command.
 See [the feature map](docs/MOLE-FEATURES.md) for the native implementation
-and its boundaries. Media cleanup retains the existing file-analysis engine tools.
+and its boundaries. **Media cleanup** adapts Krokiet’s comparison and file-check
+workflows, with copy exports for EXIF cleanup and video transcode/crop. See
+[the media feature map](docs/MEDIA-FEATURES.md) for supported controls and boundaries.
 
 | Tab | What it does | Status |
 |---|---|---|
 | Clean | Mole's ported path tables (469 rows across 10 groups), app leftovers and downloaded installers; real measurements, age-based installer recommendations and selectable installer locations | working |
-| Duplicates | Exact duplicates, similar images/music/video, empty folders/files, temp files, big files, via the bundled engine. Shows previews, with three layouts (rows, thumbnails side by side, closest pair per group) and a similarity threshold slider wired to the engine's own `-s` measure | working |
+| Media cleanup | Similar images, duplicates, videos and music; eight file checks; EXIF, video transcode and crop plans; typed filters, references, grouped previews and exports of new copies | working |
 | Uninstall | Installed apps and exact related-file plans; running, system and shared app data are protected | working |
 | Analyze | Native folder measurements, drill-down, partial-size reporting and reviewed Trash moves | working |
 | Status / Optimize | Live activity and separate maintenance, Preview-aware actions and database backups; administrator tasks stay manual | working |

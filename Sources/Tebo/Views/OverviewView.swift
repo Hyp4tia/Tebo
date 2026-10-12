@@ -14,16 +14,16 @@ struct OverviewView: View {
     }
     private var scanned: Bool {
         workspace.pages.filter { workspace == .images || $0.isCleanupSource }
-            .contains { $0.tabID.map { appState.resultsByTab[$0] != nil } ?? false }
+            .flatMap(\.resultTabIDs).contains { appState.resultsByTab[$0] != nil }
     }
     private var partial: Bool {
         workspace.pages.filter { workspace == .images || $0.isCleanupSource }
-            .compactMap(\.tabID).flatMap { appState.results(for: $0) }.contains { !$0.isSizeComplete }
+            .flatMap(\.resultTabIDs).flatMap { appState.results(for: $0) }.contains { !$0.isSizeComplete }
     }
     private var bytes: Int64 {
         var paths: Set<String> = []
         return workspace.pages.filter { workspace == .images || $0.isCleanupSource }
-            .compactMap(\.tabID).flatMap { appState.results(for: $0) }
+            .flatMap(\.resultTabIDs).flatMap { appState.results(for: $0) }
             .reduce(0) { total, row in paths.insert(row.path).inserted ? total + row.sizeBytes : total }
     }
 
@@ -96,9 +96,10 @@ struct OverviewView: View {
                     Text(destination.detail).font(.system(size: 11.5)).foregroundStyle(TeboPalette.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                if let key = destination.tabID, appState.resultsByTab[key] != nil {
-                    Text((appState.results(for: key).contains { !$0.isSizeComplete } ? "≥ " : "")
-                         + TeboBytes.text(appState.results(for: key).reduce(0) { $0 + $1.sizeBytes }))
+                if destination.resultTabIDs.contains(where: { appState.resultsByTab[$0] != nil }) {
+                    let rows = appState.results(forTabs: destination.resultTabIDs)
+                    Text((rows.contains { !$0.isSizeComplete } ? "≥ " : "")
+                         + TeboBytes.text(rows.reduce(0) { $0 + $1.sizeBytes }))
                         .font(.system(size: 12)).monospacedDigit().foregroundStyle(TeboPalette.secondary)
                 } else {
                     Text(destination.overviewHint)
@@ -141,8 +142,9 @@ struct WorkspaceInspector: View {
                         Button("Maintenance") { page = .optimize }
                         Button("Operation history") { page = .history }
                     } else {
-                        Button("Health & maintenance") { page = .health }
-                        Button("More file tools & history") { page = .toolbox }
+                        Button("File checks") { page = .mediaFiles }
+                        Button("Media tools") { page = .mediaTools }
+                        Button("History") { page = .history }
                     }
                 } label: {
                     Image(systemName: "line.3.horizontal.decrease").font(.system(size: 14))

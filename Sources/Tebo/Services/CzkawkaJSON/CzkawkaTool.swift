@@ -21,9 +21,14 @@ public enum CzkawkaTool: String, CaseIterable, Sendable, Hashable {
     case brokenFiles = "broken"
     case wrongExtensions = "ext"
     case badNames = "bad-names"
+    case exifMetadata = "exif-remover"
+    case videoTranscode = "video-transcode"
+    case videoCrop = "video-crop"
 
     /// Exact clap subcommand name, e.g. "empty-folders". Use this to build argv.
-    public var clapName: String { rawValue }
+    public var clapName: String {
+        [.videoTranscode, .videoCrop].contains(self) ? "video-optimizer" : rawValue
+    }
 
     /// Human label used in scan UI / item reasons.
     public var displayName: String {
@@ -40,8 +45,34 @@ public enum CzkawkaTool: String, CaseIterable, Sendable, Hashable {
         case .brokenFiles: "Broken Files"
         case .wrongExtensions: "Wrong Extensions"
         case .badNames: "Bad Names"
+        case .exifMetadata: "EXIF Metadata"
+        case .videoTranscode: "Video Transcode"
+        case .videoCrop: "Video Crop"
         }
     }
+
+    public var symbol: String {
+        switch self {
+        case .duplicates: "square.on.square"
+        case .similarImages: "photo.on.rectangle"
+        case .similarVideos, .videoTranscode: "film"
+        case .similarMusic: "music.note"
+        case .emptyFolders: "folder"
+        case .emptyFiles: "doc"
+        case .bigFiles: "externaldrive"
+        case .temporaryFiles: "clock"
+        case .invalidSymlinks: "link"
+        case .brokenFiles: "doc.badge.ellipsis"
+        case .wrongExtensions, .badNames: "textformat"
+        case .exifMetadata: "camera"
+        case .videoCrop: "crop"
+        }
+    }
+
+    public var isGrouped: Bool { [.duplicates, .similarImages, .similarVideos, .similarMusic].contains(self) }
+    static let fileChecks: [Self] = [.bigFiles, .emptyFolders, .emptyFiles, .temporaryFiles, .invalidSymlinks, .brokenFiles, .wrongExtensions, .badNames]
+    public var isExportTool: Bool { [.exifMetadata, .videoTranscode, .videoCrop].contains(self) }
+    public var tabID: String { self == .duplicates ? "duplicates" : "media-\(rawValue)" }
 
     /// Extra flags CzkawkaBridge appends after the shared set, per tool.
     /// bad-names checks are opt-in: with none of -u/-j/-w/-n/-a the engine checks
@@ -64,7 +95,7 @@ public enum CzkawkaTool: String, CaseIterable, Sendable, Hashable {
 /// Duplicate search method. Changes both the engine's grouping AND the JSON shape it
 /// writes (see CzkawkaJSON): HASH nests groups per size key, SIZE/NAME are flat per
 /// key, SIZE_NAME is a bare array of groups with no keys at all.
-public enum CzkawkaDupSearchMethod: String, CaseIterable, Sendable, Hashable {
+public enum CzkawkaDupSearchMethod: String, CaseIterable, Sendable, Hashable, Codable {
     case hash = "HASH"
     case size = "SIZE"
     case name = "NAME"

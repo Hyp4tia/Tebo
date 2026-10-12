@@ -101,7 +101,10 @@ Cleanup (Mole's Purge workflow). Downloaded installers are grouped under Clean.
 History replaces the unsupported Auto Clean entry
 in this workspace. Each workflow has a semantic icon, tint and description.
 Its six overview rows adapt together between 54pt and 75pt, with 18pt bottom padding.
-The image workspace uses the same shell and retains its engine workflows.
+Media cleanup uses the same shell. Its six rows are Similar Images, Duplicates,
+Similar Videos, Similar Music, File Checks and Media Tools. File Checks contains
+eight engine tools; Media Tools contains metadata cleanup and video copy exports.
+History is shared across workspaces.
 Diagnostic folder sizes do not contribute
 to cleanup totals; incomplete measurements are marked with ≥.
 

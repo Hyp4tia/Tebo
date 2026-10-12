@@ -397,7 +397,7 @@ struct CzkawkaJSONTests {
     func clapNames() {
         #expect(CzkawkaTool.allCases.map(\.clapName)
             == ["dup", "empty-folders", "big", "empty-files", "temp", "image", "music", "video",
-                "symlinks", "broken", "ext", "bad-names"])
+                "symlinks", "broken", "ext", "bad-names", "exif-remover", "video-optimizer", "video-optimizer"])
         #expect(CzkawkaDupSearchMethod.allCases.map(\.clapValue)
             == ["HASH", "SIZE", "NAME", "SIZE_NAME"])
         // bad-names checks are opt-in; every check flag is enabled by default.

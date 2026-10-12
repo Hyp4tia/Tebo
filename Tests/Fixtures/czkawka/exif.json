@@ -1,0 +1,50 @@
+[
+  {
+    "path": "/private/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-media-fixture-kfzbs4vs/photos/metadata.jpg",
+    "size": 1000,
+    "modified_date": 1791823238,
+    "exif_tags": [
+      {
+        "name": "DateTimeOriginal",
+        "code": 36867,
+        "group": "EXIF"
+      },
+      {
+        "name": "ExifImageHeight",
+        "code": 40963,
+        "group": "EXIF"
+      },
+      {
+        "name": "ExifImageWidth",
+        "code": 40962,
+        "group": "EXIF"
+      },
+      {
+        "name": "GPSLatitude",
+        "code": 2,
+        "group": "GPS"
+      },
+      {
+        "name": "GPSLatitudeRef",
+        "code": 1,
+        "group": "GPS"
+      },
+      {
+        "name": "GPSLongitude",
+        "code": 4,
+        "group": "GPS"
+      },
+      {
+        "name": "GPSLongitudeRef",
+        "code": 3,
+        "group": "GPS"
+      },
+      {
+        "name": "Model",
+        "code": 272,
+        "group": "GENERIC"
+      }
+    ],
+    "error": null
+  }
+]

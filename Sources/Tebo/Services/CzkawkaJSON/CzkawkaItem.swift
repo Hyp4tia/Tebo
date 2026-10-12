@@ -21,6 +21,7 @@ public struct CzkawkaItem: Identifiable, Hashable, Sendable {
     public let groupID: String?
     /// Tool-specific extras (hash, dimensions, tags, ...). nil for the flat tools.
     public let detail: CzkawkaItemDetail?
+    public let modifiedSeconds: Double?
 
     public init(
         id: UUID = UUID(),
@@ -28,7 +29,8 @@ public struct CzkawkaItem: Identifiable, Hashable, Sendable {
         sizeBytes: Int64,
         tool: CzkawkaTool,
         groupID: String? = nil,
-        detail: CzkawkaItemDetail? = nil
+        detail: CzkawkaItemDetail? = nil,
+        modifiedSeconds: Double? = nil
     ) {
         self.id = id
         self.path = path
@@ -36,6 +38,7 @@ public struct CzkawkaItem: Identifiable, Hashable, Sendable {
         self.tool = tool
         self.groupID = groupID
         self.detail = detail
+        self.modifiedSeconds = modifiedSeconds
     }
 
     /// Last path component, for loud row titles.
@@ -49,10 +52,9 @@ public struct CzkawkaItem: Identifiable, Hashable, Sendable {
     /// Short human reason, safe to show under the path.
     public var reason: String {
         switch detail {
-        case .duplicate: return "Same content as the rest of its group"
+        case .duplicate(let hash): return hash.isEmpty ? "Matches the selected name or size comparison; content may differ" : "Same content hash as the rest of its group"
         case .similarImage(let width, let height, let difference):
-            let pct = Int((1 - Double(min(max(difference, 0), 40)) / 40) * 100)
-            return "\(width)x\(height)px, \(pct)% similar to its group"
+            return "\(width)x\(height)px, hash difference \(difference)"
         case .similarMusic(let title, let artist, _, _):
             let tag = [title, artist].filter { !$0.isEmpty }.joined(separator: " by ")
             return tag.isEmpty ? "Same audio tags as its group" : "\(tag), same tags as its group"
@@ -66,6 +68,10 @@ public struct CzkawkaItem: Identifiable, Hashable, Sendable {
             return "Actually a .\(proper) file, named .\(current)"
         case .badName(let suggested):
             return "Suggested name: \(suggested)"
+        case .exifMetadata(let tags): return "Metadata tags: \(tags.joined(separator: ", "))"
+        case .videoOptimization(let width, let height, let codec, let crop):
+            return crop.map { "\(width)x\(height)px → \($0.width)x\($0.height)px, \(codec)" }
+                ?? "\(width)x\(height)px, \(codec): export a new encoded copy"
         case nil:
             switch tool {
             case .emptyFolders: return "Folder contains no files"
@@ -118,4 +124,15 @@ public enum CzkawkaItemDetail: Hashable, Sendable {
     /// File name the engine's checks flag; `suggested` is the fixed name it proposes
     /// (reported only; Tebo never applies fixes in place).
     case badName(suggested: String)
+    case exifMetadata(tags: [String])
+    case videoOptimization(width: Int, height: Int, codec: String, crop: MediaCropBounds?)
+}
+
+public struct MediaCropBounds: Hashable, Sendable {
+    let left: Int, top: Int, right: Int, bottom: Int
+    var width: Int { right - left }
+    var height: Int { bottom - top }
+    func isValid(width: Int, height: Int) -> Bool {
+        left >= 0 && top >= 0 && right <= width && bottom <= height && self.width > 0 && self.height > 0
+    }
 }

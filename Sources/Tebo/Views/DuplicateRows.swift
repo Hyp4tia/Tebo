@@ -83,7 +83,7 @@ struct DuplicateRowsView: View {
         case .list:
             ResultSection(
                 category: tool.displayName,
-                rows: rows.sorted { $0.sizeBytes > $1.sizeBytes },
+                rows: tool == .bigFiles ? rows : rows.sorted { $0.sizeBytes > $1.sizeBytes },
                 isSelected: { appState.selectedIDs.contains($0.id) },
                 refreshToken: 0,
                 onToggle: { appState.toggleSelection($0.id) },
@@ -192,14 +192,14 @@ private struct DuplicateGroupCard: View {
         HStack(spacing: 8) {
             Text("Group \(index)")
                 .font(.subheadline.weight(.semibold))
-            if let percent = group.similarityPercent {
+            if let difference = group.bestDifference {
                 TeboBadge(
-                    text: "\(percent)% similar",
+                    text: "difference \(difference)",
                     systemImage: "equal.circle",
-                    tint: percent >= 95 ? .orange : .secondary
+                    tint: difference <= 2 ? .orange : .secondary
                 )
             } else if group.id != "ungrouped" {
-                TeboBadge(text: "Identical content", systemImage: "equal.circle", tint: .secondary)
+                TeboBadge(text: "Matching group", systemImage: "equal.circle", tint: .secondary)
             }
             Text("\(group.rows.count) files · \(TeboBytes.text(group.totalBytes))")
                 .font(.caption)

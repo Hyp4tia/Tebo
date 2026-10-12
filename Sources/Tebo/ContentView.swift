@@ -8,7 +8,7 @@ enum CleanupWorkspace: String, CaseIterable, Identifiable {
     var pages: [WorkspacePage] {
         self == .files
             ? [.systemJunk, .applications, .optimize, .largeFiles, .status, .purge]
-            : [.similarImages, .duplicates, .similarVideos, .similarMusic, .emptyFolders, .emptyFiles]
+            : [.similarImages, .duplicates, .similarVideos, .similarMusic, .mediaFiles, .mediaTools]
     }
 }
 
@@ -16,6 +16,7 @@ enum WorkspacePage: String, Identifiable {
     case overview, systemJunk, largeFiles, duplicates, downloads, applications, archives
     case similarImages, similarVideos, similarMusic, emptyFolders, emptyFiles
     case autoClean, health, toolbox, optimize, status, purge, history
+    case mediaFiles, mediaTools
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -35,6 +36,8 @@ enum WorkspacePage: String, Identifiable {
         case .similarMusic: "Similar Music"
         case .emptyFolders: "Empty Folders"
         case .emptyFiles: "Empty Files"
+        case .mediaFiles: "File Checks"
+        case .mediaTools: "Media Tools"
         case .autoClean: "Auto Clean"
         case .health: "Health"
         case .toolbox: "Toolbox"
@@ -54,6 +57,8 @@ enum WorkspacePage: String, Identifiable {
         case .similarVideos: "film"
         case .similarMusic: "music.note"
         case .emptyFiles: "doc"
+        case .mediaFiles: "checkmark.shield"
+        case .mediaTools: "wand.and.stars"
         case .autoClean: "clock.arrow.circlepath"
         case .health: "heart"
         case .toolbox: "wrench.and.screwdriver"
@@ -80,6 +85,8 @@ enum WorkspacePage: String, Identifiable {
         case .similarMusic: "Find matching music files"
         case .emptyFolders: "Folders with nothing inside"
         case .emptyFiles: "Files with no content"
+        case .mediaFiles: "Large, empty, temporary and damaged files"
+        case .mediaTools: "Clean metadata, crop and transcode copies"
         default: ""
         }
     }
@@ -102,9 +109,9 @@ enum WorkspacePage: String, Identifiable {
     var tint: Color {
         switch self {
         case .systemJunk: TeboPalette.mint
-        case .largeFiles, .emptyFolders: TeboPalette.blue
+        case .largeFiles, .emptyFolders, .mediaFiles: TeboPalette.blue
         case .duplicates, .similarImages: TeboPalette.purple
-        case .downloads, .similarVideos: TeboPalette.orange
+        case .downloads, .similarVideos, .mediaTools: TeboPalette.orange
         case .applications, .similarMusic: TeboPalette.violet
         case .optimize: TeboPalette.orange
         case .status: TeboPalette.mint
@@ -113,11 +120,20 @@ enum WorkspacePage: String, Identifiable {
         }
     }
     var isCleanupSource: Bool { [.systemJunk, .applications, .archives, .purge].contains(self) }
+    var resultTabIDs: [String] {
+        switch self {
+        case .mediaFiles: CzkawkaTool.fileChecks.map(\.tabID)
+        case .mediaTools: [CzkawkaTool.exifMetadata, .videoTranscode, .videoCrop].map(\.tabID)
+        default: tabID.map { [$0] } ?? []
+        }
+    }
     var overviewHint: String {
         switch self {
         case .optimize: "Review tasks"
         case .status: "View status"
         case .applications: "Browse apps"
+        case .mediaFiles: "Browse checks"
+        case .mediaTools: "Export copies"
         default: "Not scanned"
         }
     }
@@ -221,6 +237,8 @@ struct ContentView: View {
         case .similarMusic: DuplicatesView(initialTool: .similarMusic)
         case .emptyFolders: DuplicatesView(initialTool: .emptyFolders)
         case .emptyFiles: DuplicatesView(initialTool: .emptyFiles)
+        case .mediaFiles: DuplicatesView(initialTool: .bigFiles, tools: CzkawkaTool.fileChecks)
+        case .mediaTools: MediaToolsView()
         case .archives: MoleInstallerView()
         case .health: HealthView()
         case .toolbox: ToolboxView()

@@ -1,0 +1,2 @@
+# Read-only real engine capture
+# command: ['/Users/zeyadhussein/Documents/Projects/Tebo/Engines/czkawka_cli', 'exif-remover', '-d', '/var/folders/k9/67tnh85n2517lqkls3y11zl40000gn/T/tebo-media-fixture-kfzbs4vs/photos', '-p', '/Users/zeyadhussein/Documents/Projects/Tebo/Tests/Fixtures/czkawka/exif.json', '-N', '-M', '-W']

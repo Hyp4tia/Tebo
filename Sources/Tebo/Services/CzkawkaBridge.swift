@@ -72,7 +72,8 @@ public struct CzkawkaBridge: Sendable {
         tool: CzkawkaTool,
         in directories: [URL],
         dupSearchMethod: CzkawkaDupSearchMethod = .hash,
-        imageMaxDifference: Int? = nil
+        imageMaxDifference: Int? = nil,
+        settings: MediaScanSettings? = nil
     ) -> AsyncThrowingStream<CzkawkaItem, Error> {
         precondition(!directories.isEmpty, "scan requires at least one directory")
         let engineURL = self.engineURL
@@ -84,7 +85,8 @@ public struct CzkawkaBridge: Sendable {
                         tool: tool,
                         directories: directories,
                         dupSearchMethod: dupSearchMethod,
-                        maxDifference: imageMaxDifference
+                        maxDifference: imageMaxDifference,
+                        settings: settings
                     ) { item in
                         try Task.checkCancellation()
                         continuation.yield(item)
@@ -108,14 +110,16 @@ public struct CzkawkaBridge: Sendable {
         tool: CzkawkaTool,
         in directories: [URL],
         dupSearchMethod: CzkawkaDupSearchMethod = .hash,
-        imageMaxDifference: Int? = nil
+        imageMaxDifference: Int? = nil,
+        settings: MediaScanSettings? = nil
     ) async throws -> [CzkawkaItem] {
         var collected: [CzkawkaItem] = []
         for try await item in scan(
             tool: tool,
             in: directories,
             dupSearchMethod: dupSearchMethod,
-            imageMaxDifference: imageMaxDifference
+            imageMaxDifference: imageMaxDifference,
+            settings: settings
         ) {
             collected.append(item)
         }
@@ -133,6 +137,7 @@ public struct CzkawkaBridge: Sendable {
         directories: [URL],
         dupSearchMethod: CzkawkaDupSearchMethod,
         maxDifference: Int?,
+        settings: MediaScanSettings?,
         yield: (CzkawkaItem) throws -> Void
     ) async throws {
         // Fail fast and loud: a missing engine is an error, never an empty scan.
@@ -153,17 +158,22 @@ public struct CzkawkaBridge: Sendable {
         for directory in directories {
             arguments.append(contentsOf: ["-d", directory.path])
         }
-        if tool == .duplicates {
+        if let settings {
+            arguments += try settings.commonArguments(for: tool)
+        }
+        if settings == nil, tool == .duplicates {
             arguments.append(contentsOf: ["-s", dupSearchMethod.clapValue])
         }
-        if tool == .similarImages, let maxDifference {
+        if settings == nil, tool == .similarImages, let maxDifference {
             // The engine's own strictness knob: 0 = identical, up to 40 = loosely similar.
             arguments.append(contentsOf: ["-s", String(min(max(maxDifference, 0), 40))])
         }
         // Per-tool opt-in flags (bad-names checks). Never -F (fix rewrites files in
         // place), never -D/-y (delete/trash): Tebo only finds, it never mutates.
-        arguments.append(contentsOf: tool.extraClapFlags)
+        if settings == nil { arguments.append(contentsOf: tool.extraClapFlags) }
         arguments.append(contentsOf: ["-p", jsonURL.path, "-N", "-M", "-W"])
+        if let settings { arguments += try settings.toolArguments(for: tool) }
+        else if tool.isExportTool { arguments += try MediaScanSettings().toolArguments(for: tool) }
         // Safety rule (never violated, and covered by a test): no -D, no -y, no other
         // delete/trash flags. The engine only finds; DeletePipeline alone may trash.
 
@@ -172,6 +182,11 @@ public struct CzkawkaBridge: Sendable {
         var environment = ProcessInfo.processInfo.environment
         environment["CZKAWKA_CACHE_PATH"] = tempDir.appendingPathComponent("cache").path
         environment["CZKAWKA_CONFIG_PATH"] = tempDir.appendingPathComponent("config").path
+        // Finder-launched apps may lack Homebrew in PATH. The media core invokes ffmpeg/ffprobe.
+        if let ffmpeg = EngineLocator.findFFmpeg() {
+            let toolsDirectory = URL(fileURLWithPath: ffmpeg).deletingLastPathComponent().path
+            environment["PATH"] = toolsDirectory + ":" + (environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin")
+        }
 
         // Exit comes from the shared runner's terminationHandler. Not waitUntilExit(): after a
         // cancel-triggered terminate() the blocking wait can miss the child's exit event and hang
@@ -203,7 +218,7 @@ public struct CzkawkaBridge: Sendable {
         }
 
         do {
-            try CzkawkaJSON.forEachItem(in: data, tool: tool, dupSearchMethod: dupSearchMethod) { item in
+            try CzkawkaJSON.forEachItem(in: data, tool: tool, dupSearchMethod: settings?.duplicateMethod ?? dupSearchMethod) { item in
                 try yield(item)
             }
         } catch let error as CzkawkaJSONError {
