@@ -98,7 +98,7 @@ struct ReviewPanel: View {
 
                 if !advisories.isEmpty {
                     Button("Review \(advisories.count)…") { isPresented = true }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(TeboButtonStyle())
                         .help("Open the full list of entries that were kept back, and why")
                 }
             }

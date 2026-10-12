@@ -66,17 +66,27 @@ from `project.yml` builds a real signed `Tebo.app`. After changing files, re-run
 
 ## What it does
 
+The File cleanup workspace exposes **Clean, Uninstall, Optimize, Analyze, Status,
+and Project Cleanup**, with History and protection settings. Clean includes
+downloaded installers; Project Cleanup adapts Mole's Purge command.
+See [the feature map](docs/MOLE-FEATURES.md) for the native implementation
+and its boundaries. Media cleanup retains the existing file-analysis engine tools.
+
 | Tab | What it does | Status |
 |---|---|---|
-| Clean | Mole's ported path tables (469 rows across 10 groups), measured on this Mac, biggest first | working |
+| Clean | Mole's ported path tables (469 rows across 10 groups), app leftovers and downloaded installers; real measurements, age-based installer recommendations and selectable installer locations | working |
 | Duplicates | Exact duplicates, similar images/music/video, empty folders/files, temp files, big files, via the bundled engine. Shows previews, with three layouts (rows, thumbnails side by side, closest pair per group) and a similarity threshold slider wired to the engine's own `-s` measure | working |
-| Apps | Leftovers whose owning app is gone, grouped by the app they came from with the app's real icon when its bundle can still be found (including one still in the Trash) | working |
-| Disk | Volume total/free, snapshot count, and the largest files under a folder you pick | working |
-| Health | Live memory/cores/uptime plus Mole's maintenance catalog, admin tasks listed with the command to run yourself | working |
-| Toolbox | Purge, Installers, Fixers (symlinks/broken/ext/names), History | working |
+| Uninstall | Installed apps and exact related-file plans; running, system and shared app data are protected | working |
+| Analyze | Native folder measurements, drill-down, partial-size reporting and reviewed Trash moves | working |
+| Status / Optimize | Live activity and separate maintenance, Preview-aware actions and database backups; administrator tasks stay manual | working |
+| Project Cleanup / History | Protected cleanup of rebuildable project folders and actual operation logs | working |
 
 The development plan and the working notes are kept beside the checkout, not published here.
 Nothing in this app invents results: if a scan finds nothing, it says so.
+
+The interface uses silver surfaces and tactile graphite/pearl controls. The
+artwork fills the background behind the workspace; Settings → Appearance lets
+you adjust its blur live, with the value retained between launches.
 
 ## Safety model
 
@@ -89,6 +99,8 @@ Nothing in this app invents results: if a scan finds nothing, it says so.
    Protection is compared by inode, so a case-variant alias such as `/SYSTEM` is caught too.
 4. **Your whitelist wins.** Entries live in `~/.config/tebo/whitelist` (one protected
    substring per line) and are applied before every scan and again before every delete.
+   Absolute protected children keep their parents; physical path aliases are checked
+   at removal. Whole user-data roots and credential trees stay protected.
 5. **Everything is logged** to `~/Library/Logs/tebo/operations.log`.
 6. **No privilege escalation.** Tasks that need root are listed with the exact command and a
    disabled Run button; the app never asks for an administrator password and never runs them.
@@ -101,7 +113,7 @@ Nothing in this app invents results: if a scan finds nothing, it says so.
 ## Verification
 
 ```sh
-swift test                                  # 144 tests, 20 suites
+swift test                                  # current logic and integration suite
 swift run -c release Tebo --benchmark=30    # footprint across 30 scans
 Tebo.app/Contents/MacOS/Tebo --selftest      # what the running app resolved and how
 ```

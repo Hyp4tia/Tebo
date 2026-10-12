@@ -162,7 +162,7 @@ public struct NativeZipPayloadInspector: ZipPayloadInspecting {
         guard entryCount != 0xFFFF else { return false } // zip64: unknown layout, fail closed
         let cdSize = window.le32(eocdIndex + 12)
         let cdOffset = window.le32(eocdIndex + 16)
-        guard UInt64(cdOffset) + UInt64(cdSize) <= fileSize,
+        guard cdSize <= 4_194_304, UInt64(cdOffset) + UInt64(cdSize) <= fileSize,
               (try? handle.seek(toOffset: UInt64(cdOffset))) != nil,
               let central = try? handle.read(upToCount: Int(cdSize)),
               central.count == Int(cdSize) else { return false }

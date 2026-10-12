@@ -54,7 +54,13 @@ public actor OperationLog {
 
     /// Read last N lines for the History view. Cheap tail-read.
     public func recentLines(limit: Int = 100) -> [String] {
-        guard let text = try? String(contentsOf: fileURL) else { return [] }
+        guard let handle = try? FileHandle(forReadingFrom: fileURL) else { return [] }
+        defer { try? handle.close() }
+        guard let size = try? handle.seekToEnd() else { return [] }
+        let start = size > 524_288 ? size - 524_288 : 0
+        guard (try? handle.seek(toOffset: start)) != nil, var data = try? handle.readToEnd() else { return [] }
+        if start > 0, let lineEnd = data.firstIndex(of: 10) { data = Data(data.suffix(from: lineEnd + 1)) }
+        guard let text = String(data: data, encoding: .utf8) else { return [] }
         let lines = text.split(separator: "\n").map(String.init)
         return Array(lines.suffix(limit))
     }

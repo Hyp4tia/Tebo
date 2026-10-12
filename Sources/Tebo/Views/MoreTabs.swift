@@ -61,9 +61,11 @@ struct ToolboxView: View {
                     title: "Purge",
                     subtitle: "Rebuildable project folders: node_modules, target, dist",
                     icon: "hammer",
+                    removalValidator: { await ProjectArtifactScanner().protectionReason(for: URL(fileURLWithPath: $0), whitelist: whitelist) },
                     runScan: {
                         return await CleanerService().findProjectArtifacts(whitelist: whitelist)
-                    }
+                    },
+                    extraInfo: { Text("Repositories, tracked files and deployment keys stay protected.").font(.caption).foregroundStyle(.secondary) }
                 )
             case .installers:
                 ScanTab(
@@ -115,7 +117,7 @@ struct ToolboxView: View {
                         } label: {
                             Label("Reload", systemImage: "arrow.clockwise")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(TeboButtonStyle())
                         .controlSize(.small)
                     }
                     Text("Every preview + Trash move, newest last")
@@ -200,14 +202,40 @@ struct ToolboxView: View {
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var newEntry = ""
+    @AppStorage(TeboAppearance.backgroundBlurKey) private var backgroundBlur = TeboAppearance.defaultBlur
 
     var body: some View {
         Form {
+            Section("Appearance") {
+                TeboArtworkBackground()
+                    .frame(height: 88)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(TeboPalette.line, lineWidth: 1) }
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Background blur")
+                        Spacer()
+                        Text("\(Int(backgroundBlur))").monospacedDigit().foregroundStyle(.secondary)
+                    }
+                    Slider(value: $backgroundBlur, in: 0...50, step: 1) {
+                        Text("Background blur")
+                    } minimumValueLabel: {
+                        Text("Sharp").font(.caption)
+                    } maximumValueLabel: {
+                        Text("Soft").font(.caption)
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("Background blur")
+                    Text("Softens the artwork behind the workspace. Controls and text stay sharp.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .contain)
+            }
             // The dry-run switch lives in the toolbar: one control for one state, always visible.
             Section("Safety") {
                 VStack(alignment: .leading, spacing: 2) {
                     Toggle("Preview only", isOn: Binding(get: { appState.dryRunEnabled }, set: { appState.dryRunEnabled = $0 }))
-                    Text("On: every scan is a preview, nothing is deleted.")
+                    Text("On: cleanup, uninstall and maintenance actions are previews. Nothing is changed.")
                     Text("Off: removals move files to the Trash and are logged to ~/Library/Logs/tebo/operations.log.")
                 }
                 .font(.callout)
@@ -229,6 +257,8 @@ struct SettingsView: View {
                     .disabled(newEntry.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 Text("Saved to ~/.config/tebo/whitelist and applied before every scan.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("Action names such as cache_refresh also protect maintenance tasks.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Engines") {

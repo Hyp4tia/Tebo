@@ -372,13 +372,19 @@ struct CzkawkaBridgeTests {
             }
             return items
         }
-        // Give the engine time to spawn, write its pid and start sleeping.
-        try await Task.sleep(for: .milliseconds(400))
+        // Synchronize with an actual launch. A fixed delay races with scheduler load
+        // and pre-launch cancellation, which correctly never creates a child.
+        let launchDeadline = Date.now.addingTimeInterval(5)
+        var pidText = ""
+        while Date.now < launchDeadline {
+            pidText = (try? String(contentsOf: pidFile, encoding: .utf8))?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if Int(pidText) != nil { break }
+            try await Task.sleep(for: .milliseconds(25))
+        }
         consumer.cancel()
         _ = await consumer.result   // must return promptly, not hang
 
-        let pidText = try String(contentsOf: pidFile, encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard let pid = Int(pidText) else {
             Issue.record("fake engine never wrote its pid")
             return

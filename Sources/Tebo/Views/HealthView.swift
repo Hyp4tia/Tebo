@@ -97,7 +97,7 @@ struct HealthView: View {
                     ProgressView().controlSize(.small)
                 } else {
                     Button("Run") { run(task) }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(TeboButtonStyle())
                         .disabled(!listing.isAvailable || task.needsAdmin || runningTaskID != nil)
                 }
             }
@@ -124,7 +124,7 @@ struct HealthView: View {
     private func run(_ task: OptimizeTask) {
         runningTaskID = task.id
         Task {
-            let result = await runner.run(task)
+            let result = await runner.run(task, preview: appState.dryRunEnabled, protectedPatterns: appState.whitelist)
             results[task.id] = result
             runningTaskID = nil
         }
@@ -164,6 +164,8 @@ struct HealthView: View {
 
     private func describe(_ result: OptimizeTaskResult) -> String {
         switch result {
+        case .preview(let commands): return "Preview only. Nothing changed.\n" + commands.joined(separator: "\n")
+        case .skippedProtected: return "Protected by your maintenance settings."
         case .succeeded(let output):
             let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? "Done." : "Done: \(trimmed.prefix(200))"
@@ -180,6 +182,7 @@ struct HealthView: View {
 
     private func resultColor(_ result: OptimizeTaskResult) -> Color {
         switch result {
+        case .preview, .skippedProtected: return .secondary
         case .succeeded: return .secondary
         case .failed, .timedOut: return .orange
         case .skippedNeedsAdmin, .skippedUnavailableBinary: return .secondary

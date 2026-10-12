@@ -12,6 +12,7 @@ public struct ScanResult: Identifiable, Hashable, Sendable, Codable {
     public let sizeBytes: Int64
     public let category: String   // e.g. "User app cache", "Duplicates"
     public let reason: String     // Why it is safe, shown in UI
+    public let isSizeComplete: Bool
     /// True when the scanner that produced this row also knows a rule that makes it a safe
     /// default choice (Mole's "safe" risk tier, a duplicate copy beyond the first per group, the
     /// largest files, a stale installer). "Select recommended" ticks exactly these rows and
@@ -24,7 +25,8 @@ public struct ScanResult: Identifiable, Hashable, Sendable, Codable {
         sizeBytes: Int64,
         category: String,
         reason: String,
-        recommendedForSelection: Bool = false
+        recommendedForSelection: Bool = false,
+        isSizeComplete: Bool = true
     ) {
         self.id = id
         self.path = path
@@ -32,11 +34,12 @@ public struct ScanResult: Identifiable, Hashable, Sendable, Codable {
         self.category = category
         self.reason = reason
         self.recommendedForSelection = recommendedForSelection
+        self.isSizeComplete = isSizeComplete
     }
 
     /// Human-readable size, e.g. "1.2 GB". Cached formatter = fast.
     public var displaySize: String {
-        ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .file)
+        (isSizeComplete ? "" : "≥ ") + ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .file)
     }
 
     /// Last path component for loud row titles ("Chrome" not the full path).

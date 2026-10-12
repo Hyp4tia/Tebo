@@ -49,6 +49,15 @@ struct OptimizeTests {
 
     // MARK: Catalog integrity
 
+    @Test("Preview and maintenance protections never launch a command")
+    func previewAndProtection() async {
+        let nonexistent = makeTask(id: "protected_probe", executable: "/never-run-this")
+        let preview = await OptimizeRunner().run(nonexistent, preview: true, recordLine: { _ in })
+        #expect(preview == .preview(commands: nonexistent.commandLines))
+        let protected = await OptimizeRunner().run(nonexistent, protectedPatterns: ["protected_probe"], recordLine: { _ in })
+        #expect(protected == .skippedProtected)
+    }
+
     @Test("Catalog has unique task ids")
     func uniqueIDs() {
         let ids = OptimizeCatalog.all.map(\.id)
@@ -106,14 +115,14 @@ struct OptimizeTests {
 
     @Test("Admin flag matches the upstream catalog")
     func adminClassification() {
-        #expect(OptimizeCatalog.all.count == 8)
+        #expect(OptimizeCatalog.all.count == 10)
         let admin = Set(OptimizeCatalog.all.filter(\.needsAdmin).map(\.id))
         #expect(admin == [
             "system_maintenance", "network_optimization", "network_stack_optimize",
             "disk_permissions_repair", "spotlight_index_optimize", "periodic_maintenance",
         ])
         let userLevel = Set(OptimizeCatalog.all.filter { !$0.needsAdmin }.map(\.id))
-        #expect(userLevel == ["cache_refresh", "prevent_network_dsstore"])
+        #expect(userLevel == ["cache_refresh", "prevent_network_dsstore", "spotlight_status", "login_items_audit"])
     }
 
     // MARK: Catalog query API
@@ -121,7 +130,7 @@ struct OptimizeTests {
     @Test("Grouped query exposes live availability and admin flags")
     func groupedQuery() {
         let groups = OptimizeCatalog.groups()
-        #expect(groups.map(\.name) == ["Network", "Finder", "System", "Maintenance"])
+        #expect(groups.map(\.name) == ["System", "Network", "Finder", "Maintenance"])
         let listings = groups.flatMap(\.items)
         // Every task appears exactly once. Grouping legitimately reorders sections, so compare
         // as sets (catalog order is preserved inside each group).

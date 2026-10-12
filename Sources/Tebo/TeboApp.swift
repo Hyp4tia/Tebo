@@ -42,6 +42,8 @@ struct TeboApp: App {
         Settings {
             SettingsView()
                 .environment(appState)
+                .buttonStyle(TeboButtonStyle())
+                .preferredColorScheme(.light)
         }
     }
 }

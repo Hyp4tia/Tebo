@@ -16,6 +16,8 @@ import Foundation
 /// Typed outcome of one optimize run. Maps onto Mole's outcome vocabulary (outcomes.sh:18-23):
 /// applied/unchanged -> succeeded, failed -> failed, skipped/unavailable -> the two skip cases.
 public enum OptimizeTaskResult: Sendable, Equatable {
+    case preview(commands: [String])
+    case skippedProtected
     /// Every step exited 0. `output` is the concatenated stdout.
     case succeeded(output: String)
     /// A step exited non-zero (or could not be spawned). `stderrTail` is the last 500 chars of
@@ -40,11 +42,22 @@ public struct OptimizeRunner: Sendable {
     public func run(
         _ task: OptimizeTask,
         timeout: TimeInterval = 120,
+        preview: Bool = false,
+        protectedPatterns: Set<String> = [],
         fileManager: FileManager = .default,
         recordLine: (@Sendable (String) async -> Void)? = nil
     ) async -> OptimizeTaskResult {
         let log = recordLine ?? { await OperationLog.shared.record($0) }
         await log("Optimize \(task.id): started")
+        if protectedPatterns.contains(where: { !$0.isEmpty && (task.id.localizedCaseInsensitiveContains($0)
+            || task.title.localizedCaseInsensitiveContains($0)) }) {
+            await log("Optimize \(task.id): protected, skipped")
+            return .skippedProtected
+        }
+        if preview {
+            await log("Optimize \(task.id): preview only, no changes")
+            return .preview(commands: task.commandLines)
+        }
 
         // Requirement: missing binaries are detected up front and reported, never attempted.
         guard OptimizeCatalog.isAvailable(task, fileManager: fileManager) else {

@@ -93,13 +93,7 @@ public struct CleanerService: Sendable {
     public func findProjectArtifacts(
         whitelist: Set<String>
     ) async -> [ScanResult] {
-        var out: [ScanResult] = []
-        for root in MolePaths.projectSearchRoots {
-            if Task.isCancelled || out.count >= 500 { break }
-            guard SafetyGate.isAllowed(path: root, whitelist: whitelist) else { continue }
-            out += findArtifacts(under: root, depth: 0, maxDepth: 4, whitelist: whitelist)
-        }
-        return out.sorted { $0.sizeBytes > $1.sizeBytes }
+        await ProjectArtifactScanner().scan(whitelist: whitelist).rows
     }
 
     /// Traversal helper. Internal (not private) so the rules are unit-testable.

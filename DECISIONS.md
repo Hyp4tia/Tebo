@@ -42,3 +42,57 @@ and services; missing features show unavailable states.
 Consequences: this direction supersedes the old top-pill shell guidance. Visual
 details live in [DESIGN.md](DESIGN.md); verification and deliverables live in the
 [UI task record](.hermes/plans/2026-10-11_tebo-reference-ui.md).
+
+## MOLE-001: native Mole workflows in File cleanup
+
+Date: 2026-10-11. Source: the user's request for Mole's actual File cleanup
+features and explicit choice to implement missing functionality too.
+
+Choice: expose Clean, Uninstall, Optimize, Analyze, Status, Purge and Installers,
+with History and protection settings. Fill the missing native services while
+preserving the reference shell, Preview, Trash-only removal, whitelist and
+no-privilege-escalation policy. Keep image-workspace navigation and engine tools.
+
+Rationale: the earlier generic categories mixed cleanup systems and did not
+expose Mole's actual workflows. Native services avoid adding another shell engine
+and let reviewed identities, partial measurements and app-ownership safeguards
+remain explicit.
+
+Consequences: this scope supersedes the earlier frontend-only boundary for this
+feature update. Administrator tasks remain manual, and this is a native adaptation
+of the core workflows rather than full CLI/proprietary-app parity. See
+[the feature map](docs/MOLE-FEATURES.md) and
+[task record](.hermes/plans/2026-10-11_mole-file-workspace.md).
+
+## MOLE-002: group installers under Clean and clarify Purge
+
+Date: 2026-10-11. Source: the user's cleanup UI feedback asking whether Installers
+belongs in Clean, asking what Purge means, and reporting uneven stat cards.
+
+Choice: include installer discovery in the Clean scan and remove its separate
+sidebar/overview entry. Preserve selectable installer locations and conservative
+age recommendations. Rename Purge to Project Cleanup, with explanatory copy
+about rebuildable build outputs and downloaded dependencies. Give shared stat
+cards one height regardless of optional detail text.
+
+Consequences: this supersedes MOLE-001's separate Installers navigation and Purge
+label. The underlying native capabilities and protection checks are retained.
+The user subsequently said scrolling was resolved; scrolling changes are outside
+this follow-up. See [DESIGN.md](DESIGN.md) and
+[the polish task record](.hermes/plans/2026-10-11_cleanup-ui-polish.md).
+
+## UI-002: approved silver layout, tactile controls and adjustable backdrop
+
+Date: 2026-10-12. Source: the user selected the frosted-silver image, requested
+skeuomorphic buttons and the supplied artwork, approved the preview with "go ahead",
+and clarified that the artwork is a blurred background with a Settings slider.
+
+Choice: keep the full-size three-column workspace, use neutral graphite/pearl
+button faces, and render the artwork behind the window's content. Only the artwork
+receives the saved blur value; controls remain sharp. Keep current window dimensions,
+real scanner data and workflows. The later icon replacement request was withdrawn;
+the original logo and ICNS remain unchanged.
+
+Consequences: this refines UI-001's original palette and depth. It does not adopt
+the alternative Mole top-navigation concepts. See [DESIGN.md](DESIGN.md) and
+[the implementation record](.hermes/plans/2026-10-12_skeuomorphic-preview.md).

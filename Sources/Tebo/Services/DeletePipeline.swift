@@ -106,6 +106,8 @@ public struct DeletePipeline: Sendable {
     public func trash(
         paths: [String],
         whitelist: Set<String>,
+        expectedIdentities: [String: FileIdentity] = [:],
+        additionalValidation: (@Sendable (String) async -> String?)? = nil,
         beforeMove: (@Sendable (String) async -> Void)? = nil
     ) async -> DeleteReport {
         var outcomes: [DeleteReport.Outcome] = []
@@ -113,7 +115,8 @@ public struct DeletePipeline: Sendable {
         for path in paths {
             if Task.isCancelled { break }
             outcomes.append(
-                await trashOne(path: path, whitelist: whitelist, beforeMove: beforeMove)
+                await trashOne(path: path, whitelist: whitelist,
+                    expectedIdentity: expectedIdentities[path], additionalValidation: additionalValidation, beforeMove: beforeMove)
             )
         }
         return DeleteReport(outcomes: outcomes)
@@ -124,6 +127,8 @@ public struct DeletePipeline: Sendable {
     private func trashOne(
         path: String,
         whitelist: Set<String>,
+        expectedIdentity: FileIdentity?,
+        additionalValidation: (@Sendable (String) async -> String?)?,
         beforeMove: (@Sendable (String) async -> Void)?
     ) async -> DeleteReport.Outcome {
         // 1. Gate: string rules + symlink resolution + inode guards.
@@ -137,6 +142,10 @@ public struct DeletePipeline: Sendable {
             await OperationLog.shared.record("Skipped \(path): file no longer exists")
             return DeleteReport.Outcome(path: path, result: .skipped(reason: .missing))
         }
+        if let expectedIdentity, bound != expectedIdentity {
+            await OperationLog.shared.record("Skipped \(path): changed since preview")
+            return DeleteReport.Outcome(path: path, result: .skipped(reason: .identityChanged))
+        }
 
         // 3. Measure for the report. This is the expensive window: the file
         //    can be swapped while the size walk runs, hence the recheck.
@@ -148,6 +157,10 @@ public struct DeletePipeline: Sendable {
             return DeleteReport.Outcome(path: path, result: .skipped(reason: .identityChanged))
         }
 
+        if let reason = await additionalValidation?(path) {
+            await OperationLog.shared.record("Skipped \(path): \(reason)")
+            return DeleteReport.Outcome(path: path, result: .failed(message: reason))
+        }
         await beforeMove?(path)
 
         // 5. Final identity check immediately before the move. An unavoidable

@@ -4,14 +4,14 @@ import SwiftUI
 
 // MARK: - Tebo visual language
 // One place for the whole look: cards, tiles, badges, section headers, paths, empty states.
-// Adapted (not copied) from studying Mole's own Mac app: warm canvas, elevated cards, big
-// numbers with small units, hairline separators, real data only. System accent stays the
-// user's own: selection and primary actions use it, nothing else invents colour.
+// Approved silver composition, tactile neutral controls and a quiet artwork backdrop.
+// Semantic accents identify tools and progress; every metric still comes from real data.
 
 enum Tebo {
     static let cardRadius: CGFloat = 12
     static let rowSpacing: CGFloat = 10
     static let gutter: CGFloat = 16
+    static let statTileContentHeight: CGFloat = 72
 }
 
 /// One formatter for every size the UI shows, so numbers are comparable across tabs.
@@ -36,6 +36,7 @@ extension View {
                 RoundedRectangle(cornerRadius: Tebo.cardRadius, style: .continuous)
                     .strokeBorder(TeboPalette.line, lineWidth: 1)
             )
+            .shadow(color: TeboPalette.ink.opacity(0.025), radius: 8, y: 3)
     }
 }
 
@@ -100,16 +101,20 @@ enum TeboPalette {
     static let referenceWidth: CGFloat = 1352
     static let sidebarWidth: CGFloat = 284
     static let inspectorWidth: CGFloat = 352
-    static let canvas = Color(red: 0.964, green: 0.952, blue: 0.940)
-    static let sidebar = Color(red: 0.910, green: 0.891, blue: 0.868)
-    static let inspector = Color(red: 0.953, green: 0.941, blue: 0.925)
-    static let card = Color(red: 0.981, green: 0.975, blue: 0.966)
-    static let ink = Color(red: 0.098, green: 0.118, blue: 0.145)
-    static let secondary = Color(red: 0.390, green: 0.402, blue: 0.423)
-    static let muted = Color(red: 0.555, green: 0.551, blue: 0.549)
-    static let line = Color(red: 0.884, green: 0.867, blue: 0.850)
-    static let selection = Color(red: 0.865, green: 0.845, blue: 0.818)
-    static let halo = Color(red: 0.909, green: 0.895, blue: 0.875)
+    static let canvas = Color(red: 0.969, green: 0.973, blue: 0.980)
+    static let sidebar = Color(red: 0.897, green: 0.902, blue: 0.909)
+    static let inspector = Color(red: 0.966, green: 0.971, blue: 0.980)
+    static let card = Color(red: 0.995, green: 0.996, blue: 1.000)
+    static let ink = Color(red: 0.078, green: 0.102, blue: 0.153)
+    static let secondary = Color(red: 0.350, green: 0.373, blue: 0.427)
+    static let muted = Color(red: 0.430, green: 0.452, blue: 0.502)
+    static let line = Color(red: 0.856, green: 0.872, blue: 0.900)
+    static let selection = Color(red: 0.818, green: 0.835, blue: 0.863)
+    static let halo = Color(red: 0.891, green: 0.929, blue: 1.000)
+    static let graphiteTop = Color(red: 0.370, green: 0.380, blue: 0.390)
+    static let graphiteBottom = Color(red: 0.170, green: 0.180, blue: 0.190)
+    static let pearlTop = Color.white
+    static let pearlBottom = Color(red: 0.865, green: 0.878, blue: 0.898)
     static let mint = Color(red: 0.040, green: 0.665, blue: 0.569)
     static let blue = Color(red: 0.204, green: 0.443, blue: 0.954)
     static let purple = Color(red: 0.477, green: 0.224, blue: 0.858)
@@ -126,6 +131,7 @@ final class WorkspaceActivity {
     var trashedCount = 0
     var groupsByTab: [String: [UUID: String]] = [:]
     var detailsByTab: [String: [UUID: CzkawkaItemDetail]] = [:]
+    var identitiesByTab: [String: [String: FileIdentity]] = [:]
 
     var durationText: String {
         guard let scanDuration else { return "\u{2013}" }
@@ -153,18 +159,49 @@ extension EnvironmentValues {
     }
 }
 
-struct TeboLogo: View {
-    let size: CGFloat
-    private static var image: NSImage? {
-        var candidates = [Bundle.main.url(forResource: "TeboLogo", withExtension: "png")]
+@MainActor private enum TeboAssets {
+    static let logo = load("TeboLogo")
+    static let backdrop = load("TeboBackdrop")
+
+    private static func load(_ name: String) -> NSImage? {
+        var candidates = [Bundle.main.url(forResource: name, withExtension: "png")]
         #if SWIFT_PACKAGE
-        candidates.append(Bundle.module.url(forResource: "TeboLogo", withExtension: "png", subdirectory: "Resources"))
+        candidates.append(Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Resources"))
         #endif
         return candidates.compactMap { $0 }.compactMap { NSImage(contentsOf: $0) }.first
     }
+}
+
+struct TeboArtworkBackground: View {
+    @AppStorage(TeboAppearance.backgroundBlurKey) private var backgroundBlur = TeboAppearance.defaultBlur
+
+    var body: some View {
+        GeometryReader { geometry in
+            if let image = TeboAssets.backdrop {
+                Image(nsImage: image).resizable().interpolation(.high)
+                    .scaledToFill()
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
+                    .blur(radius: min(50, max(0, backgroundBlur)))
+                    .clipped()
+            } else {
+                TeboPalette.sidebar
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+enum TeboAppearance {
+    static let backgroundBlurKey = "appearance.backgroundBlur"
+    static let defaultBlur: Double = 18
+}
+
+struct TeboLogo: View {
+    let size: CGFloat
     var body: some View {
         Group {
-            if let image = Self.image {
+            if let image = TeboAssets.logo {
                 Image(nsImage: image).resizable().interpolation(.high).scaledToFit()
             } else {
                 Image(nsImage: NSApp.applicationIconImage).resizable().scaledToFit()
@@ -222,9 +259,11 @@ struct ScanRing: View {
     let isComplete: Bool
     var body: some View {
         ZStack {
-            Circle().stroke(TeboPalette.ink.opacity(0.16), lineWidth: 5)
+            Circle().stroke(TeboPalette.blue.opacity(0.18), lineWidth: 5)
             Circle().trim(from: 0, to: isComplete ? 0.98 : 0.72)
-                .stroke(TeboPalette.ink, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .stroke(LinearGradient(colors: [TeboPalette.blue.opacity(0.55), TeboPalette.blue],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        style: StrokeStyle(lineWidth: 5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
         .padding(3).accessibilityHidden(true)
@@ -233,16 +272,88 @@ struct ScanRing: View {
 
 struct TeboPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 21).frame(height: 42)
-            .background {
-                Capsule().fill(LinearGradient(colors: [TeboPalette.ink.opacity(0.93), TeboPalette.ink],
-                                               startPoint: .top, endPoint: .bottom))
+        TeboButtonFace(label: configuration.label, pressed: configuration.isPressed, tone: .graphite, prominent: true)
+    }
+}
+
+enum TeboControlTone: Equatable { case pearl, graphite }
+
+/// A native Button keeps its keyboard, focus and disabled behavior; only its face changes.
+struct TeboButtonStyle: ButtonStyle {
+    var tone: TeboControlTone = .pearl
+    var prominent = false
+    func makeBody(configuration: Configuration) -> some View {
+        TeboButtonFace(label: configuration.label, pressed: configuration.isPressed, tone: tone, prominent: prominent)
+    }
+}
+
+private struct TeboButtonFace<Label: View>: View {
+    let label: Label
+    let pressed: Bool
+    let tone: TeboControlTone
+    let prominent: Bool
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.controlSize) private var controlSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let small = controlSize == .small || controlSize == .mini
+        let height: CGFloat = prominent ? 42 : small ? 26 : 30
+        let radius: CGFloat = prominent ? 22 : 8
+        return label
+            .font(.system(size: prominent ? 14 : small ? 11.5 : 12, weight: .medium))
+            .foregroundStyle(tone == .graphite ? Color.white : TeboPalette.ink)
+            .padding(.horizontal, prominent ? 21 : small ? 9 : 12)
+            .frame(minHeight: height)
+            .background(TeboControlSurface(tone: tone, radius: radius,
+                                           pressed: pressed, enabled: isEnabled))
+            .contentShape(RoundedRectangle(cornerRadius: radius))
+            .opacity(isEnabled ? 1 : 0.45)
+            .offset(y: pressed && isEnabled ? 1 : 0)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: pressed)
+    }
+}
+
+struct TeboControlSurface: View {
+    var tone: TeboControlTone = .pearl
+    var radius: CGFloat = 8
+    var pressed = false
+    var enabled = true
+
+    var body: some View {
+        let graphite = tone == .graphite
+        let top = graphite ? TeboPalette.graphiteTop : TeboPalette.pearlTop
+        let bottom = graphite ? TeboPalette.graphiteBottom : TeboPalette.pearlBottom
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(LinearGradient(colors: pressed ? [bottom, top] : [top, bottom],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(graphite ? Color.black.opacity(0.5) : TeboPalette.ink.opacity(0.19), lineWidth: 1)
             }
-            .opacity(configuration.isPressed ? 0.8 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .overlay {
+                RoundedRectangle(cornerRadius: max(1, radius - 1), style: .continuous)
+                    .strokeBorder(LinearGradient(colors: [.white.opacity(graphite ? 0.38 : 0.95),
+                                                          .white.opacity(0.03)],
+                                                 startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                    .padding(1)
+            }
+            .shadow(color: .black.opacity(enabled && !pressed ? graphite ? 0.19 : 0.11 : 0.025),
+                    radius: pressed ? 1 : graphite ? 5 : 2.5, y: pressed ? 0 : graphite ? 3 : 1.5)
+    }
+}
+
+struct TeboInsetSurface: View {
+    var radius: CGFloat = 10
+    var body: some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(LinearGradient(colors: [TeboPalette.selection.opacity(0.76), TeboPalette.sidebar.opacity(0.6)],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(LinearGradient(colors: [TeboPalette.ink.opacity(0.11), .white.opacity(0.65)],
+                                                 startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            }
     }
 }
 
@@ -365,6 +476,7 @@ struct StatTile: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: Tebo.statTileContentHeight, alignment: .topLeading)
         .teboCard(padding: 12)
     }
 }
@@ -449,11 +561,26 @@ struct TeboEmptyState: View {
                 .frame(maxWidth: 380)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(TeboPrimaryButtonStyle())
                     .padding(.top, 2)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(24)
+    }
+}
+
+struct MolePageHeading: View {
+    let title: String
+    let detail: String
+    let symbol: String
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: symbol).font(.system(size: 23)).foregroundStyle(TeboPalette.secondary)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(.system(size: 23, weight: .semibold)).tracking(-0.5)
+                Text(detail).font(.system(size: 12)).foregroundStyle(TeboPalette.secondary)
+            }
+        }
     }
 }

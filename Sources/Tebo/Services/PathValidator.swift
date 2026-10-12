@@ -99,6 +99,13 @@ public enum PathValidator {
         //    symlink. The resolved string is re-checked against the deny
         //    rules: deny-only, a resolved path never grants permission.
         let resolved = resolvedPhysicalPath(of: path)
+        let physicalWhitelist = Set(whitelist.map { entry in
+            let expanded = (entry as NSString).expandingTildeInPath
+            return expanded.hasPrefix("/") ? resolvedPhysicalPath(of: expanded) : entry
+        })
+        if SafetyGate.rejectionReason(path: resolved, whitelist: whitelist.union(physicalWhitelist)) == .whitelisted {
+            return .whitelisted
+        }
         if resolved != SafetyGate.normalized(path),
            SafetyGate.isCriticalSystemPath(resolved)
             || SafetyGate.containsAppleSystemFragment(resolved) {
@@ -141,10 +148,14 @@ public enum PathValidator {
     /// /USERS/<name> and case variants of /Users/Shared or /Users/Guest).
     private static func isSameInodeAsProtectedRoot(_ path: String) -> Bool {
         let normalizedPath = SafetyGate.normalized(path)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let exactUserRoots = SafetyGate.userRootDirectoryNames
+            .map { home.appendingPathComponent($0).path }
+        let userTrees = SafetyGate.userProtectedTreeNames.map { home.appendingPathComponent($0).path }
 
         // Exact roots: the leaf itself.
         if let leafID = FileIdentity.read(path: normalizedPath) {
-            for root in exactProtectedRoots where FileIdentity.read(path: root) == leafID {
+            for root in exactProtectedRoots.union(exactUserRoots) where FileIdentity.read(path: root) == leafID {
                 return true
             }
         }
@@ -153,7 +164,7 @@ public enum PathValidator {
         var probe = normalizedPath
         while true {
             if let id = FileIdentity.read(path: probe) {
-                for root in protectedTreeRoots where FileIdentity.read(path: root) == id {
+                for root in protectedTreeRoots.union(userTrees) where FileIdentity.read(path: root) == id {
                     return true
                 }
             }

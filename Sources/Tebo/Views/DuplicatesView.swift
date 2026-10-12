@@ -123,7 +123,7 @@ struct DuplicatesView: View {
                 Spacer()
                 if scannedMaxDifference != imageMaxDifference {
                     Button("Scan again to apply") { requestScan = true }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(TeboButtonStyle())
                         .controlSize(.small)
                 }
             }

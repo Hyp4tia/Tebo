@@ -3,11 +3,11 @@ import SwiftUI
 
 enum CleanupWorkspace: String, CaseIterable, Identifiable {
     case files = "File cleanup"
-    case images = "image cleanup"
+    case images = "Media cleanup"
     var id: String { rawValue }
     var pages: [WorkspacePage] {
         self == .files
-            ? [.systemJunk, .largeFiles, .duplicates, .downloads, .applications, .archives]
+            ? [.systemJunk, .applications, .optimize, .largeFiles, .status, .purge]
             : [.similarImages, .duplicates, .similarVideos, .similarMusic, .emptyFolders, .emptyFiles]
     }
 }
@@ -15,17 +15,21 @@ enum CleanupWorkspace: String, CaseIterable, Identifiable {
 enum WorkspacePage: String, Identifiable {
     case overview, systemJunk, largeFiles, duplicates, downloads, applications, archives
     case similarImages, similarVideos, similarMusic, emptyFolders, emptyFiles
-    case autoClean, health, toolbox
+    case autoClean, health, toolbox, optimize, status, purge, history
     var id: String { rawValue }
     var title: String {
         switch self {
         case .overview: "Overview"
-        case .systemJunk: "System Junk"
-        case .largeFiles: "Large Files"
+        case .systemJunk: "Clean"
+        case .largeFiles: "Analyze"
         case .duplicates: "Duplicates"
         case .downloads: "Downloads"
-        case .applications: "Applications"
-        case .archives: "Archives"
+        case .applications: "Uninstall"
+        case .archives: "Installers"
+        case .optimize: "Optimize"
+        case .status: "Status"
+        case .purge: "Project Cleanup"
+        case .history: "History"
         case .similarImages: "Similar Images"
         case .similarVideos: "Similar Videos"
         case .similarMusic: "Similar Music"
@@ -40,7 +44,8 @@ enum WorkspacePage: String, Identifiable {
         switch self {
         case .overview: "house"
         case .systemJunk: "trash"
-        case .largeFiles, .emptyFolders: "folder"
+        case .largeFiles: "chart.pie"
+        case .emptyFolders: "folder"
         case .duplicates: "square.on.square"
         case .downloads: "arrow.down.to.line"
         case .applications: "app.badge"
@@ -52,16 +57,24 @@ enum WorkspacePage: String, Identifiable {
         case .autoClean: "clock.arrow.circlepath"
         case .health: "heart"
         case .toolbox: "wrench.and.screwdriver"
+        case .optimize: "slider.horizontal.3"
+        case .status: "waveform.path.ecg"
+        case .purge: "hammer"
+        case .history: "clock.arrow.circlepath"
         }
     }
     var detail: String {
         switch self {
-        case .systemJunk: "Caches, logs, temporary files"
-        case .largeFiles: "Find the files taking up space"
+        case .systemJunk: "Caches, leftovers and downloaded installers"
+        case .largeFiles: "Explore folders and disk usage"
         case .duplicates: "Exact duplicates by file content"
         case .downloads: "Installer downloads"
-        case .applications: "Unused app data"
-        case .archives: "DMG, PKG, ISO and XIP installers"
+        case .applications: "Apps and their related files"
+        case .archives: "Downloaded installers and installer ZIPs"
+        case .optimize: "Refresh caches and maintain your Mac"
+        case .status: "Live CPU, memory and system activity"
+        case .purge: "Build outputs and downloaded dependencies"
+        case .history: "Scans, maintenance and Trash moves"
         case .similarImages: "Find visually similar images"
         case .similarVideos: "Compare similar video files"
         case .similarMusic: "Find matching music files"
@@ -73,10 +86,11 @@ enum WorkspacePage: String, Identifiable {
     var tabID: String? {
         switch self {
         case .systemJunk: "clean"
-        case .largeFiles: "disk"
+        case .largeFiles: "analyze"
         case .duplicates: "duplicates"
-        case .applications: "apps"
+        case .applications: "uninstall"
         case .archives: "installer"
+        case .purge: "purge"
         case .similarImages: "media-image"
         case .similarVideos: "media-video"
         case .similarMusic: "media-music"
@@ -92,7 +106,19 @@ enum WorkspacePage: String, Identifiable {
         case .duplicates, .similarImages: TeboPalette.purple
         case .downloads, .similarVideos: TeboPalette.orange
         case .applications, .similarMusic: TeboPalette.violet
+        case .optimize: TeboPalette.orange
+        case .status: TeboPalette.mint
+        case .purge: TeboPalette.purple
         default: TeboPalette.ink
+        }
+    }
+    var isCleanupSource: Bool { [.systemJunk, .applications, .archives, .purge].contains(self) }
+    var overviewHint: String {
+        switch self {
+        case .optimize: "Review tasks"
+        case .status: "View status"
+        case .applications: "Browse apps"
+        default: "Not scanned"
         }
     }
 }
@@ -108,22 +134,27 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geometry in
             let scale = min(1, geometry.size.width / TeboPalette.referenceWidth)
-            HStack(spacing: 0) {
-                WorkspaceSidebar(workspace: $workspace, page: $page, activity: activity)
-                    .frame(width: TeboPalette.sidebarWidth * scale)
-                Rectangle().fill(TeboPalette.line).frame(width: 1)
-                center.frame(maxWidth: .infinity, maxHeight: .infinity)
-                Rectangle().fill(TeboPalette.line).frame(width: 1)
-                WorkspaceInspector(search: $search, page: $page, activity: activity,
-                                   compact: geometry.size.height < 790)
-                    .frame(width: TeboPalette.inspectorWidth * scale)
+            ZStack {
+                TeboArtworkBackground()
+                HStack(spacing: 0) {
+                    WorkspaceSidebar(workspace: $workspace, page: $page, activity: activity)
+                        .frame(width: TeboPalette.sidebarWidth * scale)
+                    Rectangle().fill(TeboPalette.line).frame(width: 1)
+                    center.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(TeboPalette.canvas.opacity(0.80))
+                    Rectangle().fill(TeboPalette.line).frame(width: 1)
+                    WorkspaceInspector(search: $search, page: $page, activity: activity,
+                                       compact: geometry.size.height < 790,
+                                       condensed: geometry.size.height < 720, workspace: workspace)
+                        .frame(width: TeboPalette.inspectorWidth * scale)
+                }
             }
-            .background(TeboPalette.canvas)
         }
         .frame(minWidth: 1120, minHeight: 740)
         .ignoresSafeArea(.container, edges: .top)
         .foregroundStyle(TeboPalette.ink)
         .tint(TeboPalette.ink)
+        .buttonStyle(TeboButtonStyle())
         .preferredColorScheme(.light)
         .environment(activity)
         .environment(\.workspaceSearch, search)
@@ -178,15 +209,19 @@ struct ContentView: View {
     @ViewBuilder private var detail: some View {
         switch page {
         case .systemJunk: CleanView()
-        case .largeFiles: DiskView()
-        case .applications: AppsView()
+        case .largeFiles: NativeAnalyzeView()
+        case .applications: UninstallView()
+        case .optimize: MoleOptimizeView()
+        case .status: MoleStatusView()
+        case .purge: MolePurgeView()
+        case .history: OperationHistoryView()
         case .duplicates: DuplicatesView()
         case .similarImages: DuplicatesView(initialTool: .similarImages)
         case .similarVideos: DuplicatesView(initialTool: .similarVideos)
         case .similarMusic: DuplicatesView(initialTool: .similarMusic)
         case .emptyFolders: DuplicatesView(initialTool: .emptyFolders)
         case .emptyFiles: DuplicatesView(initialTool: .emptyFiles)
-        case .archives: ToolboxView(initialTool: "Installers")
+        case .archives: MoleInstallerView()
         case .health: HealthView()
         case .toolbox: ToolboxView()
         case .downloads:

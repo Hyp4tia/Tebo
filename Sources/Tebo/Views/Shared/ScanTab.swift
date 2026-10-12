@@ -10,9 +10,15 @@ struct ScanTab<ExtraInfo: View>: View {
     let title: String
     let subtitle: String
     let icon: String
+    let foundLabel: String
+    let sizeLabel: String
+    let emptyMessage: String?
+    let scanScope: [String]?
 
     /// Runs the tab's own scan and returns the rows it found.
     let runScan: () async -> [ScanResult]
+    let removalValidator: (@Sendable (String) async -> String?)?
+    let rendersEmptyRowsOverride: Bool
 
     /// What "Select recommended" means in this tab, shown beside the button. nil when the tool has
     /// no safe default (then the button stays disabled instead of guessing).
@@ -35,6 +41,7 @@ struct ScanTab<ExtraInfo: View>: View {
     @State private var isScanning = false
     @State private var showConfirm = false
     @State private var scanTask: Task<Void, Never>?
+    @State private var scanRequestID = UUID()
     /// Bumped after each scan so row previews are re-read from disk.
     @State private var refreshToken = 0
 
@@ -43,9 +50,15 @@ struct ScanTab<ExtraInfo: View>: View {
         title: String,
         subtitle: String,
         icon: String,
+        foundLabel: String = "Found",
+        sizeLabel: String = "Reclaimable",
+        emptyMessage: String? = nil,
+        scanScope: [String]? = nil,
         recommendedExplanation: String? = nil,
         rowsOverride: (([ScanResult]) -> AnyView)? = nil,
         rescanRequested: Binding<Bool>? = nil,
+        rendersEmptyRowsOverride: Bool = false,
+        removalValidator: (@Sendable (String) async -> String?)? = nil,
         runScan: @escaping () async -> [ScanResult],
         @ViewBuilder extraInfo: @escaping () -> ExtraInfo = { EmptyView() }
     ) {
@@ -53,10 +66,16 @@ struct ScanTab<ExtraInfo: View>: View {
         self.title = title
         self.subtitle = subtitle
         self.icon = icon
+        self.foundLabel = foundLabel
+        self.sizeLabel = sizeLabel
+        self.emptyMessage = emptyMessage
+        self.scanScope = scanScope
         self.recommendedExplanation = recommendedExplanation
         self.rowsOverride = rowsOverride
         self.rescanRequested = rescanRequested
         self.runScan = runScan
+        self.removalValidator = removalValidator
+        self.rendersEmptyRowsOverride = rendersEmptyRowsOverride
         self.extraInfo = extraInfo
     }
 
@@ -82,12 +101,15 @@ struct ScanTab<ExtraInfo: View>: View {
 
                     if isScanning {
                         scanningIndicator
+                    } else if items.isEmpty, rendersEmptyRowsOverride, let rowsOverride,
+                              appState.scanNote(for: tabID) != nil {
+                        rowsOverride(items)
                     } else if items.isEmpty {
                         TeboEmptyState(
                             systemImage: icon,
-                            title: appState.scanNote(for: tabID) == nil ? "Nothing scanned yet" : "Nothing found",
+                            title: appState.resultsByTab[tabID] == nil ? "Nothing scanned yet" : "Nothing found",
                             message: appState.scanNote(for: tabID)
-                                ?? "Scan to see what this tab can free. Preview is on, so nothing is deleted.",
+                                ?? emptyMessage ?? "Scan to see what this tab can free. Preview is on, so nothing is deleted.",
                             actionTitle: "Scan now",
                             action: { startScan() }
                         )
@@ -117,7 +139,8 @@ struct ScanTab<ExtraInfo: View>: View {
             actionBar(selectedCount: selectedCount, selectedBytes: selectedBytes, hasRows: !items.isEmpty)
         }
         .background(TeboPalette.canvas)
-        .onDisappear { scanTask?.cancel() }
+        .onDisappear { cancelScan() }
+        .onChange(of: scanScope, initial: true) { _, _ in synchronizeScope() }
         .onChange(of: rescanRequested?.wrappedValue) { _, requested in
             guard requested == true else { return }
             rescanRequested?.wrappedValue = false
@@ -137,7 +160,7 @@ struct ScanTab<ExtraInfo: View>: View {
         } message: {
             Text(appState.dryRunEnabled
                  ? "Preview is on, so nothing was moved. Turn Preview off in Settings to delete."
-                 : "Frees \(TeboBytes.text(selectedBytes)). Reversible from the Trash.")
+                 : "Moves the reviewed items to Trash. Reversible from the Trash.")
         }
     }
 
@@ -151,8 +174,8 @@ struct ScanTab<ExtraInfo: View>: View {
             }
             Spacer()
             if isScanning {
-                Button("Cancel") { scanTask?.cancel() }
-                    .buttonStyle(.bordered)
+                Button("Cancel") { cancelScan() }
+                    .buttonStyle(TeboButtonStyle())
             }
             ScanButton(title: "Scan", isScanning: isScanning) { startScan() }
         }
@@ -166,21 +189,21 @@ struct ScanTab<ExtraInfo: View>: View {
     private func totals(items: [ScanResult], totalBytes: Int64, selectedBytes: Int64) -> some View {
         HStack(spacing: 12) {
             StatTile(
-                label: "Found",
+                label: foundLabel,
                 value: "\(items.count)",
                 unit: items.count == 1 ? "item" : "items",
                 systemImage: icon
             )
             StatTile(
-                label: "Reclaimable",
-                value: TeboBytes.text(totalBytes),
+                label: sizeLabel,
+                value: (items.contains { !$0.isSizeComplete } ? "≥ " : "") + TeboBytes.text(totalBytes),
                 systemImage: "externaldrive.badge.minus",
                 tint: .accentColor,
                 detail: "if everything listed goes"
             )
             StatTile(
                 label: "Selected",
-                value: TeboBytes.text(selectedBytes),
+                value: (appState.selectedResults(for: tabID).contains { !$0.isSizeComplete } ? "≥ " : "") + TeboBytes.text(selectedBytes),
                 systemImage: "checkmark.circle",
                 detail: appState.selectedResults(for: tabID).isEmpty ? "nothing ticked yet" : "ready to move"
             )
@@ -218,7 +241,7 @@ struct ScanTab<ExtraInfo: View>: View {
     private var scanningIndicator: some View {
         HStack(spacing: 10) {
             ProgressView().controlSize(.small)
-            Text("Scanning. Rows appear as the engine finds them.")
+            Text("Scanning files…")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -248,7 +271,7 @@ struct ScanTab<ExtraInfo: View>: View {
             Button(selectedCount > 0 ? "Move \(selectedCount) to Trash" : "Move to Trash") {
                 showConfirm = true
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(TeboPrimaryButtonStyle())
             .disabled(selectedCount == 0 || appState.dryRunEnabled)
             .help(appState.dryRunEnabled
                   ? "Preview is on: turn it off in Settings to move files to the Trash."
@@ -285,13 +308,31 @@ struct ScanTab<ExtraInfo: View>: View {
 
     // MARK: Actions
 
+    private func cancelScan() {
+        scanTask?.cancel()
+        scanRequestID = UUID()
+        isScanning = false
+        activity.isScanning = false
+    }
+
+    private func synchronizeScope() {
+        guard let scanScope, appState.updateScanScope(scanScope, for: tabID) else { return }
+        cancelScan()
+        activity.identitiesByTab.removeValue(forKey: tabID)
+    }
+
     private func startScan() {
+        synchronizeScope()
+        scanTask?.cancel()
+        let requestID = UUID()
+        scanRequestID = requestID
         isScanning = true
         activity.isScanning = true
         let started = Date.now
         appState.clearSelection()
         scanTask = Task {
             let found = await runScan()
+            guard requestID == scanRequestID else { return }
             guard !Task.isCancelled else {
                 isScanning = false
                 activity.isScanning = false
@@ -300,7 +341,12 @@ struct ScanTab<ExtraInfo: View>: View {
             // Filter through SafetyGate BEFORE showing (fail closed).
             let safe = SafetyGate.filterAllowed(found, whitelist: appState.whitelist)
             appState.resultsByTab[tabID] = safe
-            await OperationLog.shared.record("[\\(tabID)] Previewed \\(safe.count) items")
+            activity.identitiesByTab[tabID] = Dictionary(safe.compactMap {
+                guard let identity = FileIdentity.read(path: $0.path) else { return nil }
+                return ($0.path, identity)
+            }, uniquingKeysWith: { first, _ in first })
+            await OperationLog.shared.record("[\(tabID)] Previewed \(safe.count) items")
+            guard !Task.isCancelled, requestID == scanRequestID else { return }
             refreshToken += 1
             isScanning = false
             activity.recordScan(started: started)
@@ -315,9 +361,11 @@ struct ScanTab<ExtraInfo: View>: View {
         let paths = appState.selectedResults(for: tabID).map(\.path)
         Task {
             if appState.dryRunEnabled {
-                await OperationLog.shared.record("[\\(tabID)] Dry-run: would trash \\(paths.count) items")
+                await OperationLog.shared.record("[\(tabID)] Dry-run: would trash \(paths.count) items")
             } else {
-                let report = await DeletePipeline().trash(paths: paths, whitelist: appState.whitelist)
+                let report = await DeletePipeline().trash(paths: paths, whitelist: appState.whitelist,
+                    expectedIdentities: activity.identitiesByTab[tabID] ?? [:], additionalValidation: removalValidator)
+                appState.setScanNote(report.summary, for: tabID)
                 activity.recordRemoval(report)
                 let moved = Set(report.outcomes.compactMap { outcome -> String? in
                     if case .trashed = outcome.result { return outcome.path }

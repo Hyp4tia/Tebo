@@ -7,6 +7,13 @@ struct WorkspaceSidebar: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
+        GeometryReader { geometry in
+            sidebar(compact: geometry.size.height < 710)
+        }
+        .background(TeboPalette.sidebar.opacity(0.72))
+    }
+
+    private func sidebar(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             WindowDragArea().frame(height: 73)
             HStack(spacing: 12) {
@@ -14,22 +21,22 @@ struct WorkspaceSidebar: View {
                 Text("Tebo").font(.system(size: 20, weight: .semibold)).tracking(-0.6)
             }
             .padding(.horizontal, 22)
-            .padding(.bottom, 24)
-            workspaceSwitcher.padding(.horizontal, 18).padding(.bottom, 17)
+            .padding(.bottom, 18)
+            workspaceSwitcher.padding(.horizontal, 18).padding(.bottom, 14)
             ScrollView {
-                VStack(spacing: 6) {
-                    navigationRow(.overview)
-                    ForEach(workspace.pages) { navigationRow($0) }
+                VStack(spacing: compact ? 4 : 6) {
+                    navigationRow(.overview, compact: compact)
+                    ForEach(workspace.pages) { navigationRow($0, compact: compact) }
                     Rectangle().fill(TeboPalette.line).frame(height: 1)
-                        .padding(.horizontal, 6).padding(.top, 17).padding(.bottom, 12)
-                    navigationRow(.autoClean, chevron: true)
+                        .padding(.horizontal, 6).padding(.top, compact ? 12 : 17).padding(.bottom, compact ? 6 : 12)
+                    navigationRow(workspace == .files ? .history : .autoClean, chevron: true, compact: compact)
                     SettingsLink {
                         HStack(spacing: 16) {
                             Image(systemName: "gearshape").font(.system(size: 19)).frame(width: 24)
                             Text("Settings").font(.system(size: 14))
                             Spacer()
                         }
-                        .padding(.horizontal, 12).frame(height: 44).contentShape(Rectangle())
+                        .padding(.horizontal, 12).frame(height: compact ? 40 : 44).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -48,9 +55,8 @@ struct WorkspaceSidebar: View {
                 }
             }
             .font(.system(size: 11)).foregroundStyle(TeboPalette.muted)
-            .padding(.horizontal, 24).padding(.bottom, 22)
+            .padding(.horizontal, 24).padding(.bottom, 16)
         }
-        .background(TeboPalette.sidebar)
     }
 
     private var workspaceSwitcher: some View {
@@ -62,8 +68,7 @@ struct WorkspaceSidebar: View {
                         .frame(maxWidth: .infinity).frame(height: 31)
                         .background {
                             if workspace == candidate {
-                                RoundedRectangle(cornerRadius: 7).fill(TeboPalette.card)
-                                    .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+                                TeboControlSurface(radius: 7)
                             }
                         }
                         .contentShape(Rectangle())
@@ -73,25 +78,31 @@ struct WorkspaceSidebar: View {
             }
         }
         .padding(3)
-        .background(TeboPalette.selection.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+        .background(TeboInsetSurface(radius: 10))
         .accessibilityElement(children: .contain).accessibilityLabel("Cleanup workspace")
     }
 
-    private func navigationRow(_ destination: WorkspacePage, chevron: Bool = false) -> some View {
+    private func navigationRow(_ destination: WorkspacePage, chevron: Bool = false, compact: Bool) -> some View {
         Button { page = destination } label: {
             HStack(spacing: 16) {
                 SidebarSymbol(page: destination).frame(width: 24, height: 20)
+                    .symbolVariant(page == destination ? .fill : .none)
                 Text(destination.title).font(.system(size: 14))
+                    .lineLimit(1).minimumScaleFactor(0.88).layoutPriority(1)
                 Spacer(minLength: 2)
                 if chevron {
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .light))
                 } else if let key = destination.tabID, appState.resultsByTab[key] != nil {
-                    Text(TeboBytes.text(appState.results(for: key).reduce(0) { $0 + $1.sizeBytes }))
+                    Text((appState.results(for: key).contains { !$0.isSizeComplete } ? "≥ " : "")
+                         + TeboBytes.text(appState.results(for: key).reduce(0) { $0 + $1.sizeBytes }))
                         .font(.system(size: 11.5)).monospacedDigit().foregroundStyle(TeboPalette.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.82)
                 }
             }
-            .padding(.horizontal, 12).frame(height: 44)
-            .background(page == destination ? TeboPalette.selection : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 12).frame(height: compact ? 40 : 44)
+            .background {
+                if page == destination { TeboInsetSurface() }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

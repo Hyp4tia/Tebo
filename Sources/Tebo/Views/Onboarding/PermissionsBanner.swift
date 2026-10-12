@@ -23,9 +23,9 @@ struct PermissionsBanner: View {
             Spacer(minLength: 12)
             VStack(alignment: .trailing, spacing: 6) {
                 Button("Open System Settings") { PermissionProbe.openFullDiskAccessSettings() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(TeboPrimaryButtonStyle())
                 Button("Re-check") { Task { await appState.refreshTooling() } }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TeboButtonStyle())
             }
         }
         .padding(12)

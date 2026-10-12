@@ -15,7 +15,7 @@ struct ScanButton: View {
             if isScanning { ProgressView().scaleEffect(0.7) }
             Text(isScanning ? "Scanning…" : title)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(TeboPrimaryButtonStyle())
         .disabled(isScanning)
     }
 }

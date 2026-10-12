@@ -9,7 +9,9 @@ recovered from the Trash. Source: [README.md](README.md), opening and safety mod
 
 ## Scope
 
-The existing app covers Clean, Duplicates, Apps, Disk, Health, and Toolbox.
+File cleanup covers Mole's Clean, Uninstall, Optimize, Analyze, Status and
+Project Cleanup workflows. Downloaded installers are included in Clean; Project
+Cleanup adapts Mole's Purge command. Media cleanup retains its engine-backed analysis tools.
 See [README.md](README.md#what-it-does) for each tab's scope instead of maintaining
 another feature table here. App code lives in `Sources/Tebo/`; tests in `Tests/`;
 helper notes in `Engines/`; assets and bundle configuration in `Resources/`.
@@ -43,4 +45,6 @@ The user's 2026-10-11 frontend request adopts the supplied visual reference and
 logo, adds File cleanup / image cleanup workspaces, and limits changes to UI and
 existing functionality. [DESIGN.md](DESIGN.md) owns that visual direction, and the
 [UI task record](.hermes/plans/2026-10-11_tebo-reference-ui.md) owns execution evidence.
-No next release target, schedule, or new backend scope was specified.
+The subsequent Mole-workspace request explicitly authorized implementing missing
+backend functionality. [docs/MOLE-FEATURES.md](docs/MOLE-FEATURES.md) records the
+native feature map and boundaries. No next release target or schedule was specified.

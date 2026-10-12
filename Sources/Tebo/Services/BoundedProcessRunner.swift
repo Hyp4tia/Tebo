@@ -14,10 +14,31 @@ import Foundation
 // the user can cancel it. Every bounded call site passes a value.
 
 enum BoundedProcessRunner {
-    struct Result {
+    struct Result: Sendable {
         let terminationStatus: Int32?  // nil = launch failed
         let stdout: String
         let stderr: String
+        var outputTruncated = false
+    }
+
+    private final class OutputBuffer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var data = Data()
+        private var truncated = false
+        func drain(_ handle: FileHandle) {
+            while true {
+                guard let chunk = try? handle.read(upToCount: 65_536), !chunk.isEmpty else { break }
+                lock.lock()
+                let room = max(0, 4_194_304 - data.count)
+                data.append(chunk.prefix(room))
+                if chunk.count > room { truncated = true }
+                lock.unlock()
+            }
+        }
+        func snapshot() -> (String, Bool) {
+            lock.lock(); defer { lock.unlock() }
+            return (String(data: data, encoding: .utf8) ?? "", truncated)
+        }
     }
 
     /// Single-shot resume guard for the exit handler (which can race the launch-failure path).
@@ -40,6 +61,7 @@ enum BoundedProcessRunner {
         timeout: TimeInterval?,
         environment: [String: String]? = nil
     ) async -> Result {
+        guard !Task.isCancelled else { return Result(terminationStatus: nil, stdout: "", stderr: "Cancelled") }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = arguments
@@ -52,22 +74,36 @@ enum BoundedProcessRunner {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
         let state = RunState()
+        let output = OutputBuffer(), errorOutput = OutputBuffer()
+        let readers = DispatchGroup()
+        readers.enter(); readers.enter()
+        DispatchQueue.global(qos: .utility).async {
+            output.drain(stdoutPipe.fileHandleForReading); readers.leave()
+        }
+        DispatchQueue.global(qos: .utility).async {
+            errorOutput.drain(stderrPipe.fileHandleForReading); readers.leave()
+        }
 
         return await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Result, Never>) in
                 process.terminationHandler = { proc in
                     // Runs on an internal queue after the child is reaped, so EOF on both pipes is
                     // guaranteed (the child's write ends are closed).
-                    guard let result = state.resumeOnce({
-                        let out = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                        let err = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                        return Result(terminationStatus: proc.terminationStatus, stdout: out, stderr: err)
-                    }) else { return }
-                    continuation.resume(returning: result)
+                    readers.notify(queue: .global(qos: .utility)) {
+                        guard let result = state.resumeOnce({
+                            let out = output.snapshot(), err = errorOutput.snapshot()
+                            return Result(terminationStatus: proc.terminationStatus, stdout: out.0,
+                                          stderr: err.0, outputTruncated: out.1 || err.1)
+                        }) else { return }
+                        continuation.resume(returning: result)
+                    }
                 }
                 do {
                     try process.run()
+                    if Task.isCancelled { hardKill(process) }
                 } catch {
+                    try? stdoutPipe.fileHandleForWriting.close()
+                    try? stderrPipe.fileHandleForWriting.close()
                     guard let result = state.resumeOnce({
                         Result(terminationStatus: nil, stdout: "", stderr: "")
                     }) else { return }

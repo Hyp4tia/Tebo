@@ -135,6 +135,10 @@ public enum SafetyGate {
             if path.contains(entry) { return .whitelisted }
             if entry.hasPrefix("~"),
                path.contains((entry as NSString).expandingTildeInPath) { return .whitelisted }
+            let expanded = (entry as NSString).expandingTildeInPath
+            if expanded.hasPrefix("/"), normalized(expanded).hasPrefix(normalized(path) + "/") {
+                return .whitelisted // Removing a parent would also remove this protected child.
+            }
         }
 
         // 6. Critical system paths, matched on the normalized literal so
@@ -165,10 +169,23 @@ public enum SafetyGate {
         if path.hasPrefix("/Users/") {
             let rest = String(path.dropFirst("/Users/".count))
             if !rest.isEmpty, !rest.contains("/") { return true }
+            let components = rest.split(separator: "/")
+            let relative = components.dropFirst().joined(separator: "/").lowercased()
+            if userRootDirectories.contains(relative) { return true }
+            if userProtectedTrees.contains(where: { relative == $0 || relative.hasPrefix($0 + "/") }) { return true }
         }
 
         return false
     }
+
+    /// Whole user-data roots and credentials are not cleanup candidates. Cache children remain usable.
+    static let userRootDirectoryNames: Set<String> = [
+        "Library", "Library/Application Support", "Library/Containers", "Library/Group Containers",
+        "Library/Preferences", "Library/Caches", "Library/Logs", "Library/Saved Application State", ".config", ".local"
+    ]
+    static let userProtectedTreeNames: Set<String> = [".ssh", ".gnupg", "Library/Keychains"]
+    private static let userRootDirectories = Set(userRootDirectoryNames.map { $0.lowercased() })
+    private static let userProtectedTrees = Set(userProtectedTreeNames.map { $0.lowercased() })
 
     /// Apple-system fragments. Separate from the deny list so PathValidator
     /// can re-run them on symlink-resolved paths too.

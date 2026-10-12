@@ -71,6 +71,11 @@ final class AppState {
     /// One-line note about the last scan (absent locations, early stop, engine trouble).
     var scanNotesByTab: [String: String] = [:]
 
+    /// Locations associated with a tab's cached scan. A folder change invalidates that scan.
+    var scanScopesByTab: [String: [String]] = [:]
+    var analysisRoot = NSHomeDirectory()
+    var folderAnalysis: FolderAnalysis?
+
     /// Which result rows the user ticked for deletion.
     var selectedIDs: Set<UUID> = []
 
@@ -83,6 +88,21 @@ final class AppState {
     var mediaDetailByRowID: [UUID: CzkawkaItemDetail] = [:]
 
     // MARK: Helpers
+
+    @discardableResult
+    func updateScanScope(_ scope: [String], for tab: String) -> Bool {
+        guard scanScopesByTab[tab] != scope else { return false }
+        let oldIDs = Set(results(for: tab).map(\.id))
+        selectedIDs.subtract(oldIDs)
+        groupByRowID = groupByRowID.filter { !oldIDs.contains($0.key) }
+        mediaDetailByRowID = mediaDetailByRowID.filter { !oldIDs.contains($0.key) }
+        resultsByTab.removeValue(forKey: tab)
+        advisoriesByTab.removeValue(forKey: tab)
+        scanNotesByTab.removeValue(forKey: tab)
+        if tab == "analyze" { folderAnalysis = nil }
+        scanScopesByTab[tab] = scope
+        return true
+    }
 
     /// Results for one tab (empty array if never scanned).
     func results(for tab: String) -> [ScanResult] {

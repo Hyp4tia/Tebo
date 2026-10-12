@@ -9,9 +9,8 @@ import Foundation
 //   * no shell, no sudo, absolute binary paths only;
 //   * admin-gated tasks are catalogued so the UI can show the exact self-service command, but the
 //     runner refuses to execute them unless the app already runs as root.
-// Tasks from Mole's catalog that could not meet those rules (deletes, DB surgery, multi-step
-// conditional logic, SIGKILL-uninterruptible kernel I/O) are deliberately not ported; see the
-// list at the bottom of this file.
+// File and database maintenance use MaintenanceScanner and DatabaseMaintenance instead of
+// arbitrary shell commands. This command catalog keeps privileged actions manual and bounded.
 
 public enum OptimizeCatalog {
 
@@ -19,6 +18,14 @@ public enum OptimizeCatalog {
 
     /// All ported tasks, in Mole's catalog order (catalog.sh registration order).
     public static let all: [OptimizeTask] = [
+        OptimizeTask(id: "spotlight_status", title: "Spotlight Index Check",
+            explanation: "Checks Spotlight indexing without rebuilding or changing the index.", group: "System",
+            steps: [OptimizeCommandStep(executable: "/usr/bin/mdutil", arguments: ["-s", "/"])], needsAdmin: false,
+            risk: .low, citation: "tw93/Mole 49475f1 lib/optimize/tasks.sh:191, Spotlight status probe"),
+        OptimizeTask(id: "login_items_audit", title: "Login Items Audit",
+            explanation: "Reads macOS background and login-item registrations. This audit does not disable any item.", group: "System",
+            steps: [OptimizeCommandStep(executable: "/usr/bin/sfltool", arguments: ["dumpbtm"])], needsAdmin: false,
+            risk: .low, citation: "tw93/Mole 49475f1 lib/optimize/catalog.sh:76-78"),
         // catalog.sh:31-33 — system_maintenance, opt_system_maintenance (tasks.sh:172-200).
         // Admin: dscacheutil -flushcache and killall -HUP mDNSResponder are what Mole runs
         // under `sudo`; mdutil -s / is a read-only Spotlight verification.
@@ -101,9 +108,8 @@ public enum OptimizeCatalog {
         OptimizeTask(
             id: "network_stack_optimize",
             title: "Network Stack Refresh",
-            explanation: "Flushes the routing table and clears the ARP cache to resolve network "
-                + "issues. Needs admin. Mole skips this automatically when a VPN is active; v1.0 "
-                + "does not probe for VPNs, so quit any VPN client before running it yourself.",
+            explanation: "Refreshes routing and ARP caches. Administrator access is required. "
+                + "Disconnect VPNs first; refreshing routes can briefly interrupt connections.",
             group: "Network",
             steps: [
                 OptimizeCommandStep(executable: "/sbin/route", arguments: ["-n", "flush"]),
@@ -120,10 +126,8 @@ public enum OptimizeCatalog {
         OptimizeTask(
             id: "disk_permissions_repair",
             title: "Permission Repair",
-            explanation: "Repairs ownership and permissions on the current user's home directory "
-                + "via diskutil resetUserPermissions. Needs admin. Mole first detects whether a "
-                + "repair is actually needed; v1.0 runs the command directly, so use it only when "
-                + "file-access problems appear.",
+            explanation: "Repairs home-folder ownership and permissions. Use the administrator "
+                + "command only when you are experiencing file-access problems.",
             group: "System",
             steps: [
                 OptimizeCommandStep(
@@ -141,9 +145,8 @@ public enum OptimizeCatalog {
         OptimizeTask(
             id: "spotlight_index_optimize",
             title: "Spotlight Optimization",
-            explanation: "Rebuilds the Spotlight index with mdutil -E /. Needs admin. Mole only "
-                + "offers this when speed probes show search is slow; the rebuild can take 1-2 "
-                + "hours and finishes in the background.",
+            explanation: "Rebuilds the Spotlight search index. Administrator access is required; "
+                + "indexing continues in the background.",
             group: "System",
             steps: [
                 OptimizeCommandStep(executable: "/usr/bin/mdutil", arguments: ["-E", "/"]),
@@ -158,9 +161,8 @@ public enum OptimizeCatalog {
         OptimizeTask(
             id: "periodic_maintenance",
             title: "Periodic Maintenance",
-            explanation: "Runs the macOS daily, weekly and monthly maintenance scripts (log "
-                + "rotation, locate database and friends). Needs admin. On macOS 26+ the periodic "
-                + "binary is gone and this task reports itself as unavailable.",
+            explanation: "Runs periodic system maintenance when the macOS periodic tool is "
+                + "available. Administrator access is required.",
             group: "Maintenance",
             steps: [
                 OptimizeCommandStep(
@@ -217,7 +219,7 @@ public enum OptimizeCatalog {
     }
 }
 
-// MARK: - Deliberately not ported from Mole's catalog (v1.0)
+// MARK: - Legacy command catalog boundaries
 // catalog.sh rows skipped, with the reason:
 //   saved_state_cleanup (37-39):      deletes .savedState folders — file deletion belongs
 //                                     exclusively to DeletePipeline.

@@ -206,8 +206,10 @@ public struct StatusProviders: Sendable {
     /// can, so it stays optional.
     static func nativeMemory() -> MemoryStatus {
         let total = Int64(ProcessInfo.processInfo.physicalMemory)
+        let host = mach_host_self()
+        defer { mach_port_deallocate(mach_task_self_, host) }
         var pageSize: vm_size_t = 0
-        guard host_page_size(mach_host_self(), &pageSize) == KERN_SUCCESS, pageSize > 0 else {
+        guard host_page_size(host, &pageSize) == KERN_SUCCESS, pageSize > 0 else {
             return MemoryStatus(totalBytes: total, freeBytes: nil)
         }
         var stats = vm_statistics64_data_t()
@@ -216,7 +218,7 @@ public struct StatusProviders: Sendable {
         )
         let result = withUnsafeMutablePointer(to: &stats) { pointer in
             pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, rebound, &count)
+                host_statistics64(host, HOST_VM_INFO64, rebound, &count)
             }
         }
         guard result == KERN_SUCCESS else {
