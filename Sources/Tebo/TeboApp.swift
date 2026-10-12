@@ -7,6 +7,7 @@ import SwiftUI
 struct TeboApp: App {
     // One state object for the whole app (dry-run, whitelist, results).
     @State private var appState = AppState()
+    @State private var appearance = TeboAppearanceSettings()
 
     init() {
         // Headless mode: `Tebo --selftest` reports what the app can see, then exits.
@@ -29,6 +30,7 @@ struct TeboApp: App {
         WindowGroup {
             ContentView()
                 .environment(appState) // Inject for all child views
+                .environment(appearance)
                 .frame(minWidth: 1120, minHeight: 740)
         }
         // Roomy default so tabs + stats + bottom bar never clip on launch.
@@ -42,6 +44,7 @@ struct TeboApp: App {
         Settings {
             SettingsView()
                 .environment(appState)
+                .environment(appearance)
                 .buttonStyle(TeboButtonStyle())
                 .preferredColorScheme(.light)
         }

@@ -202,9 +202,10 @@ struct ToolboxView: View {
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var newEntry = ""
-    @AppStorage(TeboAppearance.backgroundBlurKey) private var backgroundBlur = TeboAppearance.defaultBlur
+    @Environment(TeboAppearanceSettings.self) private var appearance
 
     var body: some View {
+        @Bindable var appearance = appearance
         Form {
             Section("Appearance") {
                 TeboArtworkBackground()
@@ -215,9 +216,9 @@ struct SettingsView: View {
                     HStack {
                         Text("Background blur")
                         Spacer()
-                        Text("\(Int(backgroundBlur))").monospacedDigit().foregroundStyle(.secondary)
+                        Text("\(Int(appearance.backgroundBlur))").monospacedDigit().foregroundStyle(.secondary)
                     }
-                    Slider(value: $backgroundBlur, in: 0...50, step: 1) {
+                    Slider(value: $appearance.backgroundBlur, in: 0...50, step: 1) {
                         Text("Background blur")
                     } minimumValueLabel: {
                         Text("Sharp").font(.caption)

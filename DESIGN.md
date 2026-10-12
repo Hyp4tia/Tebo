@@ -126,7 +126,11 @@ The approved hand/robot/book artwork is reconstructed as
 window behind the entire workspace; there is no artwork strip or smaller inner
 window. Only the artwork is blurred. Settings → Appearance offers a live 0–50
 blur slider, initially 18, saved under `appearance.backgroundBlur`. A small
-Settings preview makes the effect visible. The supplied logo and app icon remain
+Settings preview makes the effect visible. Both scenes observe the same
+`TeboAppearanceSettings` instance created in `TeboApp`; UserDefaults persists
+the value instead of carrying live updates between the scenes. This corrected a
+reproduced case where the preview changed but the main artwork stayed sharp.
+The supplied logo and app icon remain
 unchanged after the user withdrew the icon replacement request.
 
 The inspector logo has a soft shadow and two pearl/blue circular halos. The focus

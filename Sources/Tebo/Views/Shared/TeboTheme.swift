@@ -175,7 +175,7 @@ extension EnvironmentValues {
 }
 
 struct TeboArtworkBackground: View {
-    @AppStorage(TeboAppearance.backgroundBlurKey) private var backgroundBlur = TeboAppearance.defaultBlur
+    @Environment(TeboAppearanceSettings.self) private var appearance
 
     var body: some View {
         GeometryReader { geometry in
@@ -183,7 +183,7 @@ struct TeboArtworkBackground: View {
                 Image(nsImage: image).resizable().interpolation(.high)
                     .scaledToFill()
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
-                    .blur(radius: min(50, max(0, backgroundBlur)))
+                    .blur(radius: min(50, max(0, appearance.backgroundBlur)))
                     .clipped()
             } else {
                 TeboPalette.sidebar
@@ -197,6 +197,22 @@ struct TeboArtworkBackground: View {
 enum TeboAppearance {
     static let backgroundBlurKey = "appearance.backgroundBlur"
     static let defaultBlur: Double = 18
+}
+
+/// Both window scenes observe the same value. UserDefaults only persists it;
+/// it is not the channel for live updates between Settings and the workspace.
+@Observable @MainActor
+final class TeboAppearanceSettings {
+    private let defaults: UserDefaults
+    var backgroundBlur: Double {
+        didSet { defaults.set(backgroundBlur, forKey: TeboAppearance.backgroundBlurKey) }
+    }
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let saved = defaults.object(forKey: TeboAppearance.backgroundBlurKey) as? Double
+        backgroundBlur = saved.map { min(50, max(0, $0)) } ?? TeboAppearance.defaultBlur
+    }
 }
 
 struct TeboLogo: View {

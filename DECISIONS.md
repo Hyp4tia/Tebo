@@ -97,6 +97,11 @@ Consequences: this refines UI-001's original palette and depth. It does not adop
 the alternative Mole top-navigation concepts. See [DESIGN.md](DESIGN.md) and
 [the implementation record](.hermes/plans/2026-10-12_skeuomorphic-preview.md).
 
+2026-10-13 correction: use a single observable appearance model shared by the
+main and Settings scenes. Separate AppStorage values updated the Settings preview
+but failed to redraw the actual background in native reproduction. Keep the
+existing persistence key and slider range; live changes use direct observation.
+
 ## MEDIA-001: native Krokiet workflows in Media cleanup
 
 Date: 2026-10-12. Source: the user's rename request and instruction to create
