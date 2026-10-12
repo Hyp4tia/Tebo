@@ -3,12 +3,15 @@
 ## Current work
 
 [Media cleanup / Krokiet integration](.hermes/plans/2026-10-12_krokiet-media-workspace.md)
-is implemented and undergoing final native verification. Checkpoint `b052fad`
-was pushed to `origin/redesign` before the new integration work. The final gate
-passed 214 tests in 31 suites; the native build, signature check and bundled
-self-test passed. The workspace app is updated. Live Media cleanup UI/export
-checks await Mac unlock; those checks are not yet verified. [The feature map](docs/MEDIA-FEATURES.md) owns the
-tool coverage, export behavior and version-specific boundaries.
+is complete, including native scan, selection, layout and copy-export checks on
+disposable fixtures. The final gate passed 214 tests in 31 suites; the native
+build, signature check and bundled self-test passed. Rename checkpoint `b052fad`
+and integration `effc8d7` were pushed to `origin/redesign`, with messages ending
+in `-Codex`. Original files and the app icon are unchanged. Initial scan settings,
+Preview and blur were restored and verified after relaunch. The rebuilt app is
+open on Media cleanup's overview; no active blocker remains.
+[The feature map](docs/MEDIA-FEATURES.md) owns tool coverage, export behavior and
+version-specific boundaries.
 
 The Mole-only File cleanup workspace and its missing native services are
 implemented. See [the feature map](docs/MOLE-FEATURES.md) for supported behavior
