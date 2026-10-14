@@ -55,8 +55,10 @@ or disable library validation. Portable exports cover H.264, H.265, VP9 and AV1.
 The updater enforces HTTPS in Release, signed feeds, signed archives and validation
 before extraction. A Debug-only loopback flag exists for disposable upgrade tests;
 it is absent from Release and never enables unsigned updates. No telemetry or
-system-profile submission is enabled. The initial feed is unavailable until the
-first stable GitHub release is published, so older copies need one manual install.
+system-profile submission is enabled. Version 1.2 is published with the production
+feed. Older builds without Sparkle need one manual installation of 1.2. Later
+releases are delivered through Check for Updates in Tebo, or through automatic
+checks when the user enables them in Settings.
 
 The checked operating conditions and practical limits are recorded in
 [the 1.2 verification record](RELEASE-1.2-QA.md).

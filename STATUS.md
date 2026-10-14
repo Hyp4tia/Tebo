@@ -8,14 +8,19 @@ video helpers and source companions. The updater passed actual installation and
 corruption-rejection checks. Full Disk Access was refreshed for the signed app;
 Clean, Trash recovery, large scans and live blur checks passed. The full gate passed
 217 tests in 32 suites. [The public verification record](docs/RELEASE-1.2-QA.md)
-owns detailed measurements and limits. The source is pushed to redesign and the verified v1.2 GitHub draft contains the
-DMG, signed appcast, checksums and both source companions. Public publishing awaits
-approval. App Store remains deferred.
+owns detailed measurements and limits. The source is pushed to `main` and
+[v1.2](https://github.com/Hyp4tia/Tebo/releases/tag/v1.2) is published as the latest
+stable release with the DMG, signed appcast, checksums and both source companions.
+Public downloads match the verified artifacts, and the installed app's live
+GitHub update check reports that 1.2 is current. The final signed installation is
+`/Applications/Tebo.app`; 35 duplicate build/test bundles were moved to recoverable
+Trash. LaunchServices and Spotlight now identify one installed Tebo. App Store
+remains deferred.
 
 The live background-blur fix is complete. Settings and the main background now
 share one observable appearance state. Native checks confirmed slider changes in
 both workspaces with Settings open, an actual slider drag and relaunch persistence.
-The rebuilt app is running with Settings open and the original blur value restored.
+Verification restored the original blur value.
 The [appearance task](.hermes/plans/2026-10-12_skeuomorphic-preview.md) owns the
 reproduction, correction and verification evidence.
 
@@ -47,7 +52,7 @@ are preserved. Preview remains on by default; confirmed removals use Trash.
 ## Latest completion
 
 The approved [silver/tactile UI](.hermes/plans/2026-10-12_skeuomorphic-preview.md)
-is built in the workspace `Tebo.app`. Artwork fills the background behind the
+is included in the final app. Artwork fills the background behind the
 full-size workspace. Settings blur updates live and persists across relaunch.
 The original icon remains unchanged after the user withdrew its replacement.
 

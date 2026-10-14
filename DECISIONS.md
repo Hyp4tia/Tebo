@@ -139,3 +139,10 @@ App Store sandboxing and submission are deferred. Builds without an updater need
 one manual installation; later signed releases use the app updater.
 [The release guide](docs/RELEASING.md) owns the repeatable workflow and
 [the verification record](docs/RELEASE-1.2-QA.md) owns measured release checks.
+
+2026-10-15 delivery: the user authorized publication and pushing the verified
+release source to `main`. Version 1.2 is the latest stable GitHub release, and
+`/Applications/Tebo.app` is the final local installation. Duplicate development,
+verification and staging app bundles were moved to recoverable Trash so macOS
+offers the final app. The release task and verification record own publication,
+update-feed and installation evidence.

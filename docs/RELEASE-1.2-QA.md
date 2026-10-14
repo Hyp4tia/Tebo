@@ -1,8 +1,9 @@
 # Tebo 1.2 release verification
 
 Checked 2026-10-14 and 2026-10-15 on an arm64 Mac running macOS 27.0.1.
-Release version 1.2, internal build 3. The full external edition is prepared;
-App Store work is deferred by the user. Public publication requires approval.
+Release version 1.2, internal build 3. The full external edition is published;
+App Store work is deferred by the user. Publication was explicitly authorized
+on 2026-10-15 after the signed package and draft were verified.
 
 ## Signing and delivery
 
@@ -32,12 +33,46 @@ The Release binary contains no loopback override or ATS exception.
    version 1.2/build 3; executable and all helper bytes matched the release target.
    Its Developer ID signature and Gatekeeper assessment passed. HTTPS production
    feed settings replaced the disposable test configuration.
-4. Before the first public feed exists, manual checking displays a recoverable
-   retrieval error. The app remains usable. Actual GitHub delivery is pending
-   publication of the first stable release with appcast.xml and its matching DMG.
+4. Before publication, the missing public feed displayed a recoverable retrieval
+   error and the app remained usable. After publication, the exact final app in
+   `/Applications/Tebo.app` checked the production GitHub feed and displayed
+   "Tebo 1.2 is currently the newest version available."
 
 The local test server was stopped. No signing private key was exported or uploaded.
 Future releases must increase the internal build number and use the same update key.
+
+## Public publication and installed-copy cleanup
+
+The user authorized pushing to `main`, publishing the signed release and retaining
+only the final installed app. `main` was fast-forwarded to
+`63d077d23f90051ade9372b0226dbbf13d01e11f` and pushed. The `v1.2` tag points to the
+same source commit. [Tebo v1.2](https://github.com/Hyp4tia/Tebo/releases/tag/v1.2)
+is the latest stable release, ID 413196871, published at 2026-10-14T22:45:55Z.
+
+- Unauthenticated HTTPS downloads of the latest signed appcast and versioned DMG
+  succeeded. SHA-256 digests match the approved local artifacts. Both update
+  signatures verified; the downloaded DMG's staple and Gatekeeper checks passed.
+- All five GitHub assets are uploaded, with matching SHA-256 digests: the DMG,
+  appcast, checksums, app source and video-helper source companion.
+- The notarized app was moved from the checkout to `/Applications/Tebo.app` on
+  the same volume, preserving its inode. Strict deep signature, staple and
+  Gatekeeper checks passed after the move. Native Settings reports 1.2 (3) and
+  resolves the bundled helper from `/Applications/Tebo.app`.
+- The app inventory found 36 standalone bundles across the checkout, temporary
+  builds, Xcode DerivedData and appcast caches. These were build/test/staging
+  copies. The final app was retained and the other 35 were moved to the Trash
+  through the existing DeletePipeline, with zero skipped or failed moves.
+- Old Tebo registrations, including stale paths from earlier builds and a
+  previously mounted disk image, were unregistered. LaunchServices has one exact
+  `com.tebo.app` record and Spotlight finds one existing installation, both at
+  `/Applications/Tebo.app`. The running process uses that exact path.
+- A fresh read-only Clean scan from the final installed app completed in 11.4 s,
+  with 243 selectable items, 8.74 GB measured and 553 kept-back entries. Results
+  rendered correctly; the protected-access warning did not return after the move.
+- Preview remains on, automatic checks remain off, and background blur remains 0.
+  No signing key was exported, no Trash was emptied and release assets remain
+  unchanged. Copies inside the signed DMG are distribution assets rather than
+  separate installed apps.
 
 ## Operating conditions
 
@@ -72,7 +107,6 @@ Future releases must increase the internal build number and use the same update 
 This was verification on the available Mac, not a physical test on every supported
 macOS version or a separate fresh Mac. The macOS 14 deployment target, Mach-O minimums
 and absence of Homebrew runtime dependencies were checked. Administrator-only
-maintenance remains manual by design. No App Store submission or public release
-has been performed by this verification work.
+maintenance remains manual by design. No App Store submission has been performed.
 
 See [the release guide](RELEASING.md) for packaging and update publication steps.
