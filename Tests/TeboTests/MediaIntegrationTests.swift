@@ -169,6 +169,31 @@ struct MediaIntegrationTests {
             try await MediaExportService(ffmpegPath: nil).export(item: item, expected: snapshot, to: dir, options: .init(), preview: true, whitelist: [])
         }
     }
+    @Test("Portable release helpers export all four codecs without external tool paths",
+          .enabled(if: FileManager.default.isExecutableFile(atPath: Self.repo.appendingPathComponent(".build/video-helpers/bin/ffmpeg").path)))
+    func portableCodecs() async throws {
+        let dir = try root(); defer { try? FileManager.default.removeItem(at: dir) }
+        let source = try fixture("bordered.mp4", in: dir), before = try Data(contentsOf: source)
+        let snapshot = try #require(MediaFileSnapshot.read(source.path))
+        let item = CzkawkaItem(path: source.path, sizeBytes: snapshot.size, tool: .videoTranscode)
+        let helpers = Self.repo.appendingPathComponent(".build/video-helpers/bin")
+        for (codec, expected) in [("h264", "h264"), ("h265", "hevc"), ("vp9", "vp9"), ("av1", "av1")] {
+            var options = MediaExportOptions(); options.codec = codec
+            let result = try await MediaExportService(ffmpegPath: helpers.appendingPathComponent("ffmpeg").path)
+                .export(item: item, expected: snapshot, to: dir, options: options, preview: false, whitelist: [])
+            guard case .exported(let output) = result else { Issue.record("Missing codec output: \(codec)"); continue }
+            let probe = await BoundedProcessRunner.run(executablePath: helpers.appendingPathComponent("ffprobe").path,
+                arguments: ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,width,height", "-of", "json", output.path],
+                timeout: 10, environment: ["PATH": "/usr/bin:/bin"])
+            #expect(probe.terminationStatus == 0)
+            let object = try #require(try JSONSerialization.jsonObject(with: Data(probe.stdout.utf8)) as? [String: Any])
+            let streams = try #require(object["streams"] as? [[String: Any]])
+            #expect(streams.first?["codec_name"] as? String == expected)
+            #expect(streams.first?["width"] as? Int == 200)
+            #expect(streams.first?["height"] as? Int == 140)
+            #expect(try Data(contentsOf: source) == before)
+        }
+    }
     @Test("Actual video crop exports the detected rectangle without modifying the original", .enabled(if: EngineLocator.findFFmpeg() != nil))
     func cropCopy() async throws {
         let dir = try root(); defer { try? FileManager.default.removeItem(at: dir) }

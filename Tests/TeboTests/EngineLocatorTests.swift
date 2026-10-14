@@ -10,6 +10,23 @@ import Testing
 @Suite("EngineLocator")
 struct EngineLocatorTests {
 
+    @Test("Bundled video helpers work without external tool paths and refuse incomplete or untrusted pairs")
+    func bundledVideoHelpers() throws {
+        let app = FileManager.default.temporaryDirectory.appendingPathComponent("tebo-video-\(UUID().uuidString).app")
+        let bin = app.appendingPathComponent("Contents/MacOS")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: app) }
+        let ffmpeg = bin.appendingPathComponent("ffmpeg"), ffprobe = bin.appendingPathComponent("ffprobe")
+        for file in [ffmpeg, ffprobe] {
+            try Data("fixture executable".utf8).write(to: file)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+        }
+        #expect(EngineLocator.findFFmpeg(bundleURL: app, signatureTrusted: { _ in true }) == ffmpeg.path)
+        #expect(EngineLocator.findFFmpeg(bundleURL: app, signatureTrusted: { _ in false }) == nil)
+        try FileManager.default.removeItem(at: ffprobe)
+        #expect(EngineLocator.findFFmpeg(bundleURL: app, signatureTrusted: { _ in true }) == nil)
+    }
+
     /// Scratch executable file. Returns (url, digest).
     private func makeBinary(contents: Data, executable: Bool = true) throws -> (URL, String) {
         let dir = FileManager.default.temporaryDirectory

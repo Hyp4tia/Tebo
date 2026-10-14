@@ -34,7 +34,7 @@ enum PermissionProbe {
 
     /// Deep link straight into the Full Disk Access pane of System Settings.
     static func openFullDiskAccessSettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
+        let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles")
         if let url {
             NSWorkspace.shared.open(url)
         }

@@ -53,7 +53,8 @@ optional maximum dimensions and an optional smaller-result requirement. Crop
 exports use the actual rectangle detected by the engine. Size limits never upscale
 smaller sources. Video exports are 8-bit copies with audio; subtitles and auxiliary
 tracks are omitted. Local file/pipe protocols are the only accepted export inputs.
-The corresponding ffmpeg encoder and ffprobe must be available locally.
+External releases include the verified portable ffmpeg/ffprobe pair and all four
+encoders. Developer builds without that pair require suitable local tools.
 
 Preview performs no export writes. Actual exports require an output directory and
 confirmation. Each output uses a new exclusive filename, and originals are never
@@ -68,7 +69,7 @@ remain in the output folder and are logged.
   rename originals in place. Invalid links are read-only Finder review entries.
 - Hash caches are isolated per scan. Tebo saves the last scan settings, not
   Krokiet's separate application settings, language/theme preferences or preset files.
-- Format coverage follows the bundled core and installed helpers. Optional RAW,
+- Format coverage follows the bundled core and verified video helpers. Optional RAW,
   HEIF/AVIF support is not claimed where it has not been verified.
 - Full Disk Access restrictions still apply. A failed scan shows its error;
   unavailable functionality never returns fabricated rows.

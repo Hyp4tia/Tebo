@@ -8,6 +8,7 @@ struct TeboApp: App {
     // One state object for the whole app (dry-run, whitelist, results).
     @State private var appState = AppState()
     @State private var appearance = TeboAppearanceSettings()
+    @State private var updater = AppUpdater()
 
     init() {
         // Headless mode: `Tebo --selftest` reports what the app can see, then exits.
@@ -31,6 +32,8 @@ struct TeboApp: App {
             ContentView()
                 .environment(appState) // Inject for all child views
                 .environment(appearance)
+                .environment(updater)
+                .task { updater.start() }
                 .frame(minWidth: 1120, minHeight: 740)
         }
         // Roomy default so tabs + stats + bottom bar never clip on launch.
@@ -39,12 +42,21 @@ struct TeboApp: App {
         .windowResizability(.contentMinSize)
         // The app draws its own nav bar, so the title bar is hidden rather than duplicated.
         .windowStyle(.hiddenTitleBar)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                if updater.isAvailable {
+                    Button("Check for Updates…") { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                }
+            }
+        }
 
         // The toolbar's SettingsLink() has nothing to open without this scene.
         Settings {
             SettingsView()
                 .environment(appState)
                 .environment(appearance)
+                .environment(updater)
                 .buttonStyle(TeboButtonStyle())
                 .preferredColorScheme(.light)
         }

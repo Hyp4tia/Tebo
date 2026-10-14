@@ -41,9 +41,13 @@ final class AppState {
         let status = await Task.detached(priority: .utility) { EngineLocator.locate() }.value
         engine = status
         ffmpegPath = EngineLocator.findFFmpeg()
-        hasFullDiskAccess = await Task.detached(priority: .utility) {
-            PermissionProbe.hasFullDiskAccess()
-        }.value
+        await refreshPermissions()
+    }
+
+    /// Returning from System Settings must refresh the access observation, even
+    /// when the window and scanner tooling have not been recreated.
+    func refreshPermissions(probe: @escaping @Sendable () -> Bool = { PermissionProbe.hasFullDiskAccess() }) async {
+        hasFullDiskAccess = await Task.detached(priority: .utility, operation: probe).value
     }
 
     /// Add protection + persist. Ignores blank entries.

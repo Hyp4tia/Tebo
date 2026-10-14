@@ -169,7 +169,16 @@ enum EngineLocator {
 
     /// ffmpeg is optional: only the similar-videos tool and video file checks need it.
     /// We look where a GUI app actually can find it (GUI apps inherit a bare PATH).
-    static func findFFmpeg(fileManager: FileManager = .default) -> String? {
+    static func findFFmpeg(fileManager: FileManager = .default, bundleURL: URL = Bundle.main.bundleURL,
+                           signatureTrusted: (URL) -> Bool = isSignedByBundle) -> String? {
+        let ffmpeg = bundleURL.appendingPathComponent("Contents/MacOS/ffmpeg")
+        let ffprobe = bundleURL.appendingPathComponent("Contents/MacOS/ffprobe")
+        if bundleURL.pathExtension == "app", fileManager.fileExists(atPath: ffmpeg.path) {
+            guard fileManager.isExecutableFile(atPath: ffmpeg.path),
+                  fileManager.isExecutableFile(atPath: ffprobe.path),
+                  signatureTrusted(ffmpeg), signatureTrusted(ffprobe) else { return nil }
+            return ffmpeg.path
+        }
         if let override = ProcessInfo.processInfo.environment["SUPERCLEAN_FFMPEG"], !override.isEmpty {
             return fileManager.isExecutableFile(atPath: override) ? override : nil
         }

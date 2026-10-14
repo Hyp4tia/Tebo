@@ -109,7 +109,7 @@ struct ScanTab<ExtraInfo: View>: View {
                             systemImage: icon,
                             title: appState.resultsByTab[tabID] == nil ? "Nothing scanned yet" : "Nothing found",
                             message: appState.scanNote(for: tabID)
-                                ?? emptyMessage ?? "Scan to see what this tab can free. Preview is on, so nothing is deleted.",
+                                ?? emptyMessage ?? "Scan to see what this tab can free. Scanning is read-only; review results before removal.",
                             actionTitle: "Scan now",
                             action: { startScan() }
                         )

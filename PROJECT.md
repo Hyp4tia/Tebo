@@ -26,7 +26,7 @@ verified external hardware or platform compatibility claim.
 
 The intended behavior is preview before removal, real measured results,
 SafetyGate validation at removal time, recoverable Trash operations, verified
-engine execution, no app network activity or telemetry, and no privilege
+engine execution, local scanning, no telemetry, and network access limited to the authorized GitHub updater, and no privilege
 escalation. [README.md](README.md#safety-model) owns the documented safety model;
 [.hermes.md](.hermes.md) owns its implementation guardrails. Future authorized
 changes must establish their behavior using the applicable tests and real
@@ -49,4 +49,4 @@ existing functionality. [DESIGN.md](DESIGN.md) owns that visual direction, and t
 [UI task record](.hermes/plans/2026-10-11_tebo-reference-ui.md) owns execution evidence.
 The subsequent Mole-workspace request explicitly authorized implementing missing
 backend functionality. [docs/MOLE-FEATURES.md](docs/MOLE-FEATURES.md) records the
-native feature map and boundaries. No next release target or schedule was specified.
+native feature map and boundaries. The user selected external release 1.2 with signed in-app updates and deferred App Store work. [The release task](.hermes/plans/2026-10-14_release-preparation.md) owns preparation and verification.

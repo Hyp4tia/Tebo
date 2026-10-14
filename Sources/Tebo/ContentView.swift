@@ -141,6 +141,7 @@ enum WorkspacePage: String, Identifiable {
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var workspace: CleanupWorkspace = .files
     @State private var page: WorkspacePage = .overview
     @State private var search = ""
@@ -177,6 +178,9 @@ struct ContentView: View {
         .onChange(of: workspace) { _, _ in page = .overview; search = "" }
         .onChange(of: page) { _, _ in appState.clearSelection(); search = "" }
         .task { await appState.refreshTooling() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await appState.refreshPermissions() } }
+        }
         .sheet(isPresented: $showPermissions) {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
@@ -216,7 +220,7 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(TeboPalette.secondary)
                     .padding(16)
-                    .help("Full Disk Access is off. Click for access settings.")
+                    .help("Protected access could not be confirmed. Click to re-check or open access settings.")
                     .accessibilityLabel("Disk access settings")
             }
         }

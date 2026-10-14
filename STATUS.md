@@ -2,6 +2,15 @@
 
 ## Current work
 
+[External release preparation](.hermes/plans/2026-10-14_release-preparation.md)
+has a verified, notarized 1.2/build 3 app and DMG, signed GitHub appcast, portable
+video helpers and source companions. The updater passed actual installation and
+corruption-rejection checks. Full Disk Access was refreshed for the signed app;
+Clean, Trash recovery, large scans and live blur checks passed. The full gate passed
+217 tests in 32 suites. [The public verification record](docs/RELEASE-1.2-QA.md)
+owns detailed measurements and limits. Commit/push and GitHub draft preparation
+are the final steps; public publishing awaits approval. App Store remains deferred.
+
 The live background-blur fix is complete. Settings and the main background now
 share one observable appearance state. Native checks confirmed slider changes in
 both workspaces with Settings open, an actual slider drag and relaunch persistence.

@@ -117,3 +117,25 @@ keeps one scanner contract, native navigation and the existing safety boundaries
 Name/extension corrections and invalid links remain review-only where original
 mutation would conflict with those boundaries. See [the feature map](docs/MEDIA-FEATURES.md)
 and [task record](.hermes/plans/2026-10-12_krokiet-media-workspace.md).
+
+## RELEASE-001: full external edition first, signed GitHub updates
+
+Date: 2026-10-14. Source: the user's request to prepare/sign Tebo and provide
+GitHub-delivered updates, followed by "Full GitHub release first; defer App Store"
+and the choice of version 1.2.
+
+Choice: preserve the full File cleanup and Media cleanup edition for Developer ID
+distribution. Embed Sparkle 2.10.0 with HTTPS, signed feeds and signed archives,
+validation before extraction, optional automatic checks and no system profiling.
+Keep both Apple and update-signing private keys in the local Keychain. Build
+portable video helpers from pinned upstream snapshots; include their notices and
+corresponding source alongside the app source. Require notarization and Gatekeeper
+acceptance before creating a reviewable GitHub draft. Public publishing remains
+a separate approval step.
+
+Consequences: this supersedes the old absolute no-network constraint only for
+GitHub update checks/downloads. Scanning and media processing remain local.
+App Store sandboxing and submission are deferred. Builds without an updater need
+one manual installation; later signed releases use the app updater.
+[The release guide](docs/RELEASING.md) owns the repeatable workflow and
+[the verification record](docs/RELEASE-1.2-QA.md) owns measured release checks.

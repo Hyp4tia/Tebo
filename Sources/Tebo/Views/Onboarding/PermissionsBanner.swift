@@ -13,9 +13,11 @@ struct PermissionsBanner: View {
                 .font(.title3)
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Full Disk Access is off")
+                Text(appState.hasFullDiskAccess == true ? "Protected access confirmed" : "Protected access could not be confirmed")
                     .font(.callout).bold()
-                Text("Tebo can still clean its own data, but other apps' caches and containers stay invisible. Grant access in System Settings, then re-check.")
+                Text(appState.hasFullDiskAccess == true
+                     ? "Tebo can read a protected location. Individual files can still have their own access restrictions."
+                     : "Some cleanup locations may be unreadable. If Full Disk Access is already enabled, quit and reopen Tebo, then re-check. Replacing an ad-hoc development build can require removing its old entry and adding the signed app again.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -24,7 +26,7 @@ struct PermissionsBanner: View {
             VStack(alignment: .trailing, spacing: 6) {
                 Button("Open System Settings") { PermissionProbe.openFullDiskAccessSettings() }
                     .buttonStyle(TeboPrimaryButtonStyle())
-                Button("Re-check") { Task { await appState.refreshTooling() } }
+                Button("Re-check") { Task { await appState.refreshPermissions() } }
                     .buttonStyle(TeboButtonStyle())
             }
         }

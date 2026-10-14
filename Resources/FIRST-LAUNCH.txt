@@ -1,47 +1,41 @@
-Tebo 1.0 — first launch
-============================
-
-Tebo is not notarized by Apple yet, so macOS will ask you to confirm
-once. That is expected, and it only happens on the first open.
+Tebo: first launch
+=================
 
 INSTALL
 -------
-1. Drag Tebo.app onto the Applications folder shortcut in this window.
-2. Open Applications in Finder, then RIGHT-CLICK (or Control-click)
-   Tebo and choose "Open".
-3. macOS shows a warning that it cannot check the app for malicious
-   software. Click "Open" again.
+Drag Tebo.app onto the Applications shortcut, then open Tebo from Applications.
+Official release packages are signed, notarized and stapled by the release process.
 
-If "Open" is not offered, do this instead:
-  System Settings -> Privacy & Security -> scroll to Security ->
-  click "Open Anyway" next to the Tebo message.
+FULL DISK ACCESS
+----------------
+Folder and media scans work on locations macOS lets Tebo read. For broader Clean
+coverage, grant Full Disk Access in System Settings -> Privacy & Security ->
+Full Disk Access, add Tebo from Applications, enable it, then relaunch Tebo.
+Protected or unreadable locations can produce partial results without this access.
+Tebo never asks for an administrator password or elevates privileges.
 
-GRANT FULL DISK ACCESS (recommended)
-------------------------------------
-Without this, macOS hides caches and logs that live inside other apps, so
-several scans come back empty or partial.
+UPDATES
+-------
+Use Tebo -> Check for Updates, or Settings -> Updates. Automatic update checks
+can be enabled or disabled there. Updates come from the official GitHub releases
+and require valid cryptographic signatures before installation. Builds predating
+1.2 need one manual download to receive the updater.
 
-  System Settings -> Privacy & Security -> Full Disk Access ->
-  "+" -> choose Tebo from Applications -> turn the switch on.
+CLEANUP AND RECOVERY
+--------------------
+Preview is on by default. Scanning is read-only, and every offered row comes from
+an actual scan. Confirmed removals go to the Trash. Use Finder's Trash -> Put Back
+to recover an item before emptying the Trash. Media exports create new copies.
+Operations are logged in ~/Library/Logs/tebo/operations.log.
 
-Tebo tells you on its first screen whether it has this access. It
-never asks for an administrator password: anything that would need root is
-listed for you to run yourself.
-
-WHAT IT DOES
-------------
-Every row it offers you is a real path found on this Mac. It never shows
-sample or invented results. Removing anything moves it to the Trash, so you
-can put it back until you empty the Trash. Every action is written to
-~/Library/Logs/tebo/operations.log.
-
-Scanning is read-only. The engines it uses are: knowledge ported from
-tw93/Mole (GPL-3.0) and file analysis by czkawka (MIT). See NOTICE.md inside
-the app bundle for attribution.
+PRIVACY AND CREDITS
+-------------------
+Scans and media processing remain local. The updater contacts GitHub to check for
+and download releases; system profiling and telemetry are disabled. Video helpers
+are included, so no separate Homebrew installation is required.
+See NOTICE.md, LICENSE and VideoHelpers inside the app bundle for attribution.
 
 UNINSTALL
 ---------
-Delete Tebo.app from Applications. To remove its saved settings and
-logs as well:
-
-  rm -rf ~/.config/tebo ~/Library/Logs/tebo
+Move Tebo from Applications to the Trash. Optional saved configuration and logs
+are in ~/.config/tebo and ~/Library/Logs/tebo; review them in Finder before removal.

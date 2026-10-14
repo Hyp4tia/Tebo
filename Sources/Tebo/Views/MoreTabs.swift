@@ -201,12 +201,25 @@ struct ToolboxView: View {
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(AppUpdater.self) private var updater
     @State private var newEntry = ""
     @Environment(TeboAppearanceSettings.self) private var appearance
 
     var body: some View {
         @Bindable var appearance = appearance
         Form {
+            if updater.isAvailable {
+                Section("Updates") {
+                    Text(updater.versionText).font(.callout)
+                    Button("Check for Updates…") { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                    Toggle("Check for updates automatically", isOn: Binding(
+                        get: { updater.automaticallyChecksForUpdates },
+                        set: { updater.automaticallyChecksForUpdates = $0 }
+                    ))
+                    Text("Updates are delivered from Tebo's GitHub releases.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section("Appearance") {
                 TeboArtworkBackground()
                     .frame(height: 88)

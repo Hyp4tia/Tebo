@@ -4,6 +4,10 @@
 # Usage: xcodegen generate  →  open Tebo.xcodeproj
 
 name: Tebo
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
 options:
   bundleIdPrefix: com.tebo
   deploymentTarget:
@@ -20,11 +24,15 @@ settings:
   CODE_SIGN_IDENTITY: "-"
   DEVELOPMENT_TEAM: ""
   ENABLE_HARDENED_RUNTIME: YES
+  MARKETING_VERSION: "1.2"
+  CURRENT_PROJECT_VERSION: "3"
 
 targets:
   Tebo:
     type: application
     platform: macOS
+    dependencies:
+      - package: Sparkle
     sources:
       - path: Sources/Tebo
       - path: Resources/Tebo.icns
@@ -45,15 +53,21 @@ targets:
       - path: Resources/Tebo.entitlements
         buildPhase: none
     settings:
-      PRODUCT_NAME: Tebo
-      # Set explicitly instead of relying on xcodegen's `bundleId` key (which this version ignores)
-      # or the bundleIdPrefix default (com.tebo.Tebo). Must match the Logger subsystem
-      # in OperationLog and scripts/release.sh.
-      PRODUCT_BUNDLE_IDENTIFIER: com.tebo.app
-      INFOPLIST_FILE: Resources/Info.plist
-      CODE_SIGN_ENTITLEMENTS: Resources/Tebo.entitlements
-      COMBINE_HIDPI_IMAGES: YES
+      base:
+        PRODUCT_NAME: Tebo
+        PRODUCT_BUNDLE_IDENTIFIER: com.tebo.app
+        INFOPLIST_FILE: Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Resources/Tebo.entitlements
+        COMBINE_HIDPI_IMAGES: YES
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: Resources/Tebo.Debug.entitlements
     postBuildScripts:
+      - name: Bundle portable video helpers when available
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          python3 "$SRCROOT/scripts/bundle-video-helpers.py" "$BUILT_PRODUCTS_DIR/$FULL_PRODUCT_NAME" --identity "${EXPANDED_CODE_SIGN_IDENTITY_NAME:--}"
       # The czkawka engine ships next to the app executable and is signed with the same identity:
       # a hardened-runtime app cannot launch an unsigned nested binary.
       - name: Bundle + sign the czkawka engine
@@ -69,8 +83,12 @@ targets:
           mkdir -p "$DEST_DIR"
           cp -f "$ENGINE_SRC" "$DEST_DIR/czkawka_cli"
           chmod 755 "$DEST_DIR/czkawka_cli"
-          SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
-          /usr/bin/codesign --force --options runtime --timestamp=none \
+          SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY_NAME:--}"
+          TIMESTAMP="--timestamp=none"
+          case "$SIGN_IDENTITY" in
+            "Developer ID Application"*) TIMESTAMP="--timestamp" ;;
+          esac
+          /usr/bin/codesign --force --options runtime "$TIMESTAMP" \
             --sign "$SIGN_IDENTITY" "$DEST_DIR/czkawka_cli"
           echo "bundled czkawka_cli signed as $SIGN_IDENTITY"
 

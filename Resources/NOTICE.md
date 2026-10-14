@@ -5,9 +5,9 @@ either project below, and it is not endorsed by them.
 
 ## czkawka_cli, MIT
 
-Bundled as `Contents/Helpers/czkawka_cli`, downloaded from the official release
+Bundled as `Contents/MacOS/czkawka_cli`, downloaded from the official release
 `https://github.com/qarmin/czkawka/releases/download/12.0.2/mac_czkawka_cli_arm64` and verified
-against a pinned SHA-256 before every use (see `Engines/README.md` and `scripts/fetch-engine.sh`).
+against a pinned SHA-256 before bundling; the installed helper and app seal are verified before use (see `Engines/README.md` and `scripts/fetch-engine.sh`).
 
 Only `czkawka_cli` is bundled. The `krokiet` and `cedinia` frontends of that project are
 GPL-3.0-only and are deliberately not shipped.
@@ -43,7 +43,31 @@ Per Mole's TRADEMARK.md: this project uses its own name and icon, does not imply
 affiliation with Mole, and credits Mole as the source of the cleanup knowledge. "Mole" and the Mole
 logo remain trademarks of the Mole project.
 
-## ffmpeg, optional
+## Sparkle, BSD-style license
 
-Not bundled. If `ffmpeg` is present on the system, it enables similar-video and video file checks.
-ffmpeg is licensed LGPL-2.1-or-later / GPL-2.0-or-later depending on the build.
+Sparkle 2.10.0 provides signed updates for the external edition. Its copyright
+and license are included in `Contents/Resources/Sparkle-LICENSE.txt` in release
+packages. Official source: https://github.com/sparkle-project/Sparkle/tree/2.10.0.
+
+## Portable video helpers
+
+Release packages bundle `ffmpeg` and `ffprobe` in `Contents/MacOS`, built for
+Apple Silicon and macOS 14 with static codec libraries. No Homebrew library is
+required at runtime. Network and capture inputs are disabled in these helpers.
+
+This FFmpeg 9.0.1 build enables GPL and version 3, including x264, x265, libvpx,
+libaom and Opus. Their original copyright, license and patent notices are copied
+into `Contents/Resources/VideoHelpers/`. The exact upstream pins are recorded in
+`sources.json` there and in `scripts/build-video-helpers.py`.
+
+Each GitHub release includes `Tebo-<version>-video-sources.tar.xz`, containing the
+exact dependency snapshots, manifest and build recipe, alongside the app's own
+source snapshot. Preserve and distribute those companions with the binary.
+
+Official source projects:
+- https://ffmpeg.org/
+- https://code.videolan.org/videolan/x264
+- https://github.com/Multicorewareinc/x265
+- https://github.com/webmproject/libvpx
+- https://aomedia.googlesource.com/aom
+- https://opus-codec.org/
