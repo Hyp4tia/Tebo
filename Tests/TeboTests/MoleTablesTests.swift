@@ -160,7 +160,7 @@ struct MoleTablesTests {
         #expect(byGroup[.appCaches]?.count == 37)
         #expect(byGroup[.browsers]?.count == 114)
         #expect(byGroup[.guiApps]?.count == 187)
-        #expect(byGroup[.developerTools]?.count == 60)
+        #expect(byGroup[.developerTools]?.count == 65)
         #expect(byGroup[.cloudOffice]?.count == 21)
         #expect(byGroup[.systemPaths]?.count == 16)
         #expect(byGroup[.virtualization]?.count == 11)

@@ -100,10 +100,13 @@ struct CleanupRemovalValidator: Sendable {
         guard !Task.isCancelled else { return "Removal cancelled before validation." }
         switch row.cleanupSource {
         case .moleRule(let ruleID):
-            let inventory: MoleProcessInventory?
-            if let processInventoryProvider { inventory = await processInventoryProvider() }
-            else { inventory = await MainActor.run { TargetScanner.liveProcessInventory() } }
-            let scanner = TargetScanner(home: home, processInventory: inventory)
+            let provider: @Sendable () async -> MoleProcessInventory?
+            if let processInventoryProvider { provider = processInventoryProvider }
+            else { provider = { await MainActor.run { TargetScanner.liveProcessInventory() } } }
+            let inventory = await provider()
+            // The provider doubles as the removal bracket's refresh hook: the
+            // booted-simulator probe re-verifies process state after itself.
+            let scanner = TargetScanner(home: home, processInventory: inventory, inventoryRefresh: provider)
             return await scanner.removalProtectionReason(
                 for: row.path, ruleID: ruleID, whitelist: whitelist, targets: moleTargets
             )

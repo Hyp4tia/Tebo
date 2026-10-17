@@ -2,11 +2,12 @@ import Darwin
 import Foundation
 
 /// Open handles are checked again at the removal boundary, including SQLite sidecars.
-enum CleanupActivityGuard {
-    enum Status: Sendable, Equatable { case idle, inUse, unknown }
-    typealias Probe = @Sendable (String, [String], TimeInterval?) async -> BoundedProcessRunner.Result
+public enum CleanupActivityGuard {
+    public enum Status: Sendable, Equatable { case idle, inUse, unknown }
+    public typealias Probe = @Sendable (String, [String], TimeInterval?) async -> BoundedProcessRunner.Result
 
-    static func status(for path: String, probe: Probe = { executable, arguments, timeout in
+    static func status(for path: String, timeout: TimeInterval = 3,
+                       probe: Probe = { executable, arguments, timeout in
         await BoundedProcessRunner.run(executablePath: executable, arguments: arguments, timeout: timeout)
     }) async -> Status {
         var info = stat()
@@ -27,7 +28,7 @@ enum CleanupActivityGuard {
                 .filter { FileManager.default.fileExists(atPath: $0) }
             arguments += ["--"] + family
         }
-        let result = await probe("/usr/sbin/lsof", arguments, 3)
+        let result = await probe("/usr/sbin/lsof", arguments, timeout)
         guard !Task.isCancelled, PathBinding.read(path: path) == binding,
               !result.outputTruncated, result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .unknown
@@ -39,8 +40,11 @@ enum CleanupActivityGuard {
         return .unknown
     }
 
-    static func reason(for path: String) async -> String? {
-        switch await status(for: path) {
+    static func reason(for path: String, timeout: TimeInterval = 3, probe: Probe? = nil) async -> String? {
+        let resolvedProbe = probe ?? { executable, arguments, timeout in
+            await BoundedProcessRunner.run(executablePath: executable, arguments: arguments, timeout: timeout)
+        }
+        switch await status(for: path, timeout: timeout, probe: resolvedProbe) {
         case .idle: return nil
         case .inUse: return "An app or process is using this item. Close it and rescan."
         case .unknown: return "Open-file activity could not be verified; item kept."

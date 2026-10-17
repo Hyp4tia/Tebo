@@ -15,13 +15,32 @@ table entry and is checked against the real runtime registry by
 `MoleRuleManifestTests`. Port citations and row counts are not a certification of
 full upstream behavior.
 
-- Two Chrome profile cache rules have explicit rebuildable-cache eligibility.
+- 63 rules have explicit rebuildable-cache eligibility: the two Chrome profile
+  cache rules and 61 reviewed Developer Tools cache families (Xcode build caches,
+  simulator caches, logs and runtime caches, XCTestDevices, DeviceSupport
+  versions and inner caches, Interface Builder scratch, Android/SwiftPM/Expo/JS/
+  Python/Rust/Ruby package caches, mise, Homebrew downloads, Docker BuildX).
   Recommendations also require a safe risk label, known inactive process-name and
-  executable-path evidence, a complete local safety walk and an idle open-file probe.
-- Five scoped rules require manual review: regular Group Container cache/log
-  leaves, stale numbered NeatDM segments, and three keep-newest developer-symbol
-  families. Neither age nor the manual label proves that the content is unwanted.
-- The other 462 rules remain read-only, including broad cache/state sweeps,
+  executable-path evidence, a complete safety walk under the family's own work
+  budget and an idle open-file probe.
+- Developer cache families carry per-family contracts instead of one global
+  default. Their evidence policy tolerates only: dependency checkouts below
+  `SourcePackages/checkouts`, the exact build payload name
+  `embedded.mobileprovision`, and symlinks whose target resolves inside the
+  rule's own root. Their work ceiling is the bulk tier (up to 1M entries, 90 s
+  walk, 30 s probe per item, still cancellable); anything that cannot be
+  established stays kept. Simulator-owned rows additionally require an inactive
+  `simctl list devices booted` probe, and removal re-checks process state after
+  that probe.
+- `~/Library/Caches/com.apple.dt.Xcode` remains read-only: its path contains a
+  `com.apple.` component, which the safety gate never allows. This is a
+  deliberate local divergence; Mole removes it with Xcode closed.
+- Two scoped rules require manual review: regular Group Container cache/log
+  leaves and stale numbered NeatDM segments. Neither age nor the manual label
+  proves that the content is unwanted. DeviceSupport keeps the two newest symbol
+  versions and only lists older ones; symbols regenerate when a device with that
+  version reconnects.
+- The other 409 rules remain read-only, including broad cache/state sweeps,
   service-worker/offline stores, firmware and signed app-bundle internals.
   Administrator rules never gain removal authority.
 - Saved state, malformed preferences, installers and orphan caches are never

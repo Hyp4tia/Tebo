@@ -188,6 +188,13 @@ public enum SafetyGate {
             for index in parts.indices where parts[index] == pattern[0] {
                 let remaining = parts[index...]
                 if !includeAncestors, remaining.count < pattern.count { continue }
+                // The tree patterns are home-relative, so an ancestor match
+                // (path shorter than the pattern) is only meaningful at the
+                // user's own Library (<home>/Library...). Without that anchor,
+                // any deep directory literally named "Library" would deny its
+                // entire parent: iOS DeviceSupport stores its payload under
+                // Symbols/System/Library inside each version directory.
+                if remaining.count < pattern.count, index != 2 || parts[0] != "users" { continue }
                 let overlap = min(remaining.count, pattern.count)
                 // A parent removal would also remove the protected descendant, even if it was
                 // not present at scan time. Siblings outside this prefix remain eligible.
@@ -195,6 +202,12 @@ public enum SafetyGate {
                     fnmatch($0.1, $0.0, FNM_PATHNAME) == 0
                 }) { return true }
             }
+        }
+        // A container's Data/Library/Caches is an aggregate cache root: never a
+        // removal candidate, always traversable. The DeviceSupport payload
+        // (Symbols/System/Library/Caches) is tool content and stays cleanable.
+        if includeAncestors, parts.count >= 3, Array(parts.suffix(3)) == ["data", "library", "caches"] {
+            return true
         }
         return false
     }

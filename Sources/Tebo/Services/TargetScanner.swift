@@ -118,29 +118,82 @@ public struct TargetScanner: Sendable {
     /// field means unknown; guarded targets fail closed on the field they use.
     private let runningProcessNames: Set<String>?
     private let runningProcessPaths: Set<String>?
-    private let measurementEntryLimit: Int
-    private let measurementTimeout: TimeInterval
+    /// Scanner-level work-ceiling overrides. nil resolves the target's own tier;
+    /// tests set them to force partial walks regardless of the rule.
+    private let measurementEntryLimit: Int?
+    private let measurementTimeout: TimeInterval?
     private let directoryListing: (@Sendable (String) -> [String])?
+    private let simulatorActivityProbe: SimulatorActivityProbe.Probe
+    /// Fresh process inventory for the removal boundary's booted-simulator
+    /// bracket, whose probe can take seconds. nil skips the re-check.
+    private let inventoryRefresh: (@Sendable () async -> MoleProcessInventory?)?
+    /// Open-handle probe seam for tests; nil runs the live lsof.
+    private let activityProbe: CleanupActivityGuard.Probe?
 
     public init(home: String = NSHomeDirectory(), runningProcessNames: Set<String>?,
                 runningProcessPaths: Set<String>? = nil,
-                measurementEntryLimit: Int = 50_000, measurementTimeout: TimeInterval = 4,
-                directoryListing: (@Sendable (String) -> [String])? = nil) {
+                measurementEntryLimit: Int? = nil, measurementTimeout: TimeInterval? = nil,
+                directoryListing: (@Sendable (String) -> [String])? = nil,
+                simulatorActivityProbe: SimulatorActivityProbe.Probe? = nil,
+                inventoryRefresh: (@Sendable () async -> MoleProcessInventory?)? = nil,
+                activityProbe: CleanupActivityGuard.Probe? = nil) {
         self.home = home
         self.runningProcessNames = runningProcessNames.map { Set($0.map { $0.lowercased() }) }
         self.runningProcessPaths = runningProcessPaths.map { Set($0.map { $0.lowercased() }) }
         self.measurementEntryLimit = measurementEntryLimit
         self.measurementTimeout = measurementTimeout
         self.directoryListing = directoryListing
+        self.simulatorActivityProbe = simulatorActivityProbe ?? SimulatorActivityProbe.live
+        self.inventoryRefresh = inventoryRefresh
+        self.activityProbe = activityProbe
     }
 
     public init(home: String = NSHomeDirectory(), processInventory: MoleProcessInventory?,
-                measurementEntryLimit: Int = 50_000, measurementTimeout: TimeInterval = 4,
-                directoryListing: (@Sendable (String) -> [String])? = nil) {
+                measurementEntryLimit: Int? = nil, measurementTimeout: TimeInterval? = nil,
+                directoryListing: (@Sendable (String) -> [String])? = nil,
+                simulatorActivityProbe: SimulatorActivityProbe.Probe? = nil,
+                inventoryRefresh: (@Sendable () async -> MoleProcessInventory?)? = nil,
+                activityProbe: CleanupActivityGuard.Probe? = nil) {
         self.init(home: home, runningProcessNames: processInventory?.names,
                   runningProcessPaths: processInventory?.executablePaths,
                   measurementEntryLimit: measurementEntryLimit, measurementTimeout: measurementTimeout,
-                  directoryListing: directoryListing)
+                  directoryListing: directoryListing, simulatorActivityProbe: simulatorActivityProbe,
+                  inventoryRefresh: inventoryRefresh, activityProbe: activityProbe)
+    }
+
+    /// One process's readable identity facts. The kernel name is denied for
+    /// other users' processes (proc_name returns EPERM for roughly a quarter of
+    /// the table here); the executable path stays readable and names the
+    /// process the same way Mole's pgrep does.
+    struct ProcessFacts: Sendable, Equatable {
+        let name: String?
+        let executablePath: String?
+    }
+
+    /// Merges process facts into an inventory. A pid is only unaccounted for
+    /// when neither its name nor its executable path could be read; either one
+    /// identifies the process.
+    static func inventory(from facts: [ProcessFacts]) -> MoleProcessInventory {
+        var names: Set<String> = []
+        var executablePaths: Set<String> = []
+        var namesComplete = true
+        var pathsComplete = true
+        for fact in facts {
+            if let path = fact.executablePath {
+                let lower = path.lowercased()
+                executablePaths.insert(lower)
+                names.insert(URL(fileURLWithPath: lower).lastPathComponent)
+            } else {
+                pathsComplete = false
+            }
+            if let name = fact.name {
+                names.insert(name.lowercased())
+            } else if fact.executablePath == nil {
+                namesComplete = false
+            }
+        }
+        return MoleProcessInventory(names: namesComplete ? names : nil,
+                                    executablePaths: pathsComplete ? executablePaths : nil)
     }
 
     /// Native PID/executable inventory, enriched with NSWorkspace bundle IDs and names.
@@ -155,35 +208,31 @@ public struct TargetScanner: Sendable {
         }
         guard count > 0, Int(count) < pids.count else { return nil }
 
-        var names: Set<String> = []
-        var executablePaths: Set<String> = []
-        var namesComplete = true
-        var pathsComplete = true
+        var facts: [ProcessFacts] = []
         for pid in pids.prefix(Int(count)) where pid > 0 {
             var nameBuffer = [CChar](repeating: 0, count: 256)
             let nameSize = nameBuffer.withUnsafeMutableBufferPointer {
                 proc_name(pid, $0.baseAddress, UInt32($0.count))
             }
+            var name: String?
             if nameSize > 0, let terminator = nameBuffer.firstIndex(of: 0) {
-                let name = String(decoding: nameBuffer[..<terminator].map { UInt8(bitPattern: $0) }, as: UTF8.self)
-                names.insert(name.lowercased())
-            } else {
-                namesComplete = false
+                name = String(decoding: nameBuffer[..<terminator].map { UInt8(bitPattern: $0) }, as: UTF8.self)
             }
 
             var pathBuffer = [CChar](repeating: 0, count: 4096)
             let pathSize = pathBuffer.withUnsafeMutableBufferPointer {
                 proc_pidpath(pid, $0.baseAddress, UInt32($0.count))
             }
+            var path: String?
             if pathSize > 0, let terminator = pathBuffer.firstIndex(of: 0) {
-                let path = String(decoding: pathBuffer[..<terminator].map { UInt8(bitPattern: $0) }, as: UTF8.self).lowercased()
-                executablePaths.insert(path)
-                names.insert(URL(fileURLWithPath: path).lastPathComponent.lowercased())
-            } else {
-                pathsComplete = false
+                path = String(decoding: pathBuffer[..<terminator].map { UInt8(bitPattern: $0) }, as: UTF8.self)
             }
+            facts.append(ProcessFacts(name: name, executablePath: path))
         }
 
+        let merged = inventory(from: facts)
+        var names = merged.names ?? []
+        var executablePaths = merged.executablePaths ?? []
         for app in NSWorkspace.shared.runningApplications {
             if let bundleID = app.bundleIdentifier { names.insert(bundleID.lowercased()) }
             if let name = app.localizedName { names.insert(name.lowercased()) }
@@ -193,8 +242,8 @@ public struct TargetScanner: Sendable {
             }
         }
         return MoleProcessInventory(
-            names: namesComplete ? names : nil,
-            executablePaths: pathsComplete ? executablePaths : nil
+            names: merged.names == nil ? nil : names,
+            executablePaths: merged.executablePaths == nil ? nil : executablePaths
         )
     }
 
@@ -202,6 +251,28 @@ public struct TargetScanner: Sendable {
     @MainActor
     public static func liveRunningProcessNames() -> Set<String>? {
         liveProcessInventory()?.names
+    }
+
+    // MARK: - Rule contracts
+
+    /// Effective work ceiling: a scanner-level override (tests) replaces the tier
+    /// field it sets; everything else comes from the target's own contract.
+    private func budget(for target: CleanTarget) -> MoleScanBudget {
+        MoleScanBudget(
+            entryLimit: measurementEntryLimit ?? target.scanBudget.entryLimit,
+            measurementTimeout: measurementTimeout ?? target.scanBudget.measurementTimeout,
+            activityProbeTimeout: target.scanBudget.activityProbeTimeout
+        )
+    }
+
+    private func contract(for target: CleanTarget) -> MoleRuleContract {
+        MoleRuleContract(budget: budget(for: target), evidencePolicy: target.evidencePolicy,
+                         containmentRoot: CleanTarget.containmentRoot(for: target.path, home: home))
+    }
+
+    /// Open-handle check with the rule's own probe ceiling and the test seam.
+    private func activityReason(for path: String, timeout: TimeInterval) async -> String? {
+        await CleanupActivityGuard.reason(for: path, timeout: timeout, probe: activityProbe)
     }
 
     // MARK: - Entry point
@@ -214,6 +285,9 @@ public struct TargetScanner: Sendable {
         var advisories: [AdvisoryRow] = []
         var absent = 0
         var truncated = false
+        // The booted-device probe can take seconds; one answer per scan serves
+        // every simulator-owned target (Mole probes per guard evaluation).
+        var simulatorActivityState: SimulatorActivityProbe.State?
         let activeScopes = guardedScopes(in: targets)
 
         for target in targets {
@@ -224,6 +298,7 @@ public struct TargetScanner: Sendable {
             // A wildcard row's table path is a pattern, so it does not exist as a literal: the
             // existence question only makes sense after expansion, handled below.
             let exists = FileManager.default.fileExists(atPath: resolved)
+            let ruleContract = contract(for: target)
 
             if target.needsAdmin {
                 // Mole runs these through sudo; Tebo deliberately does not ask for root in 1.0.
@@ -240,9 +315,10 @@ public struct TargetScanner: Sendable {
                 // Sizing is best-effort here and deliberately skipped for whole-volume paths: walking
                 // "/" or "/Volumes" for a row we will not delete proves nothing and can take minutes.
                 let measured = exists && Self.isMeasurable(resolved)
-                    ? FileTreeMeasurement.read(URL(fileURLWithPath: resolved), entryLimit: measurementEntryLimit,
-                                               timeout: measurementTimeout, stopAtSafetyEvidence: true,
-                                               whitelist: whitelist) : nil
+                    ? FileTreeMeasurement.read(URL(fileURLWithPath: resolved), entryLimit: ruleContract.budget.entryLimit,
+                                               timeout: ruleContract.budget.measurementTimeout, stopAtSafetyEvidence: true,
+                                               whitelist: whitelist, policy: ruleContract.evidencePolicy,
+                                               containmentRoot: ruleContract.containmentRoot) : nil
                 let size = measured?.protectedPath == nil ? (measured?.bytes ?? 0) : 0
                 let sizeText = size > 0 ? " (\(measured?.status == .complete ? "" : "≥ ")\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))" : ""
                 let whereText = exists && !resolved.contains("*") ? " Location: \(resolved)." : ""
@@ -299,6 +375,30 @@ public struct TargetScanner: Sendable {
             }
             if paths.isEmpty { absent += 1; continue }
 
+            // Mole brackets simulator-owned cleanup around a booted-device probe;
+            // a booted device or an unverifiable state defers the whole target.
+            if target.processGuard?.probesBootedSimulator == true {
+                let state: SimulatorActivityProbe.State
+                if let cached = simulatorActivityState {
+                    state = cached
+                } else {
+                    state = await simulatorActivityProbe()
+                    simulatorActivityState = state
+                }
+                if state != .idle {
+                    advisories.append(AdvisoryRow(
+                        id: "simulator:\(target.label)",
+                        title: target.label,
+                        detail: state == .active
+                            ? "A simulator is booted. Shut it down and rescan."
+                            : "Simulator activity could not be verified; keep it and rescan.",
+                        source: target.source,
+                        group: state == .active ? "In use right now" : "Process state unknown"
+                    ))
+                    continue
+                }
+            }
+
             var rows: [ScanResult] = []
             for path in paths {
                 if Task.isCancelled { break }
@@ -309,17 +409,18 @@ public struct TargetScanner: Sendable {
                         group: guardBlock.isUnknown ? "Process state unknown" : "In use right now"))
                     continue
                 }
-                if let activityReason = await CleanupActivityGuard.reason(for: path) {
+                if let reason = await activityReason(for: path, timeout: ruleContract.budget.activityProbeTimeout) {
                     advisories.append(AdvisoryRow(id: "activity:\(target.label):\(path)", title: target.label,
-                        detail: activityReason, source: path, group: "In use or activity unverified"))
+                        detail: reason, source: path, group: "In use or activity unverified"))
                     continue
                 }
                 // Pool per candidate: measuring a big cache walks thousands of files, and each one
                 // autoreleases. Without this the footprint grows for the whole scan.
                 let measured = autoreleasepool {
-                    FileTreeMeasurement.read(URL(fileURLWithPath: path), entryLimit: measurementEntryLimit,
-                                             timeout: measurementTimeout, stopAtSafetyEvidence: true,
-                                             whitelist: whitelist)
+                    FileTreeMeasurement.read(URL(fileURLWithPath: path), entryLimit: ruleContract.budget.entryLimit,
+                                             timeout: ruleContract.budget.measurementTimeout, stopAtSafetyEvidence: true,
+                                             whitelist: whitelist, policy: ruleContract.evidencePolicy,
+                                             containmentRoot: ruleContract.containmentRoot)
                 }
                 if let protectedPath = measured.protectedPath {
                     advisories.append(AdvisoryRow(id: "protected-content:\(target.label):\(path)",
@@ -761,7 +862,27 @@ public struct TargetScanner: Sendable {
         }
         if let block = blockedByRunningProcess(target) { return block.message }
         if let block = protectedFamily(for: path, scopes: guardedScopes(in: targets)) { return block.message }
-        if let activityReason = await CleanupActivityGuard.reason(for: path) { return activityReason }
+        // Mole brackets the booted-device probe between two process checks
+        // (_probe_simulator_activity): the probe can take seconds, long enough
+        // for a build to start, so process state is verified again after it.
+        if target.processGuard?.probesBootedSimulator == true {
+            switch await simulatorActivityProbe() {
+            case .idle:
+                break
+            case .active:
+                return "A simulator is booted. Shut it down and retry."
+            case .unknown:
+                return "Simulator activity could not be verified; item kept."
+            }
+            if let inventoryRefresh, let refreshed = await inventoryRefresh(),
+               let block = blockedByRunningProcess(target, names: refreshed.names, paths: refreshed.executablePaths) {
+                return block.message
+            }
+        }
+        let ruleContract = contract(for: target)
+        if let activityReason = await activityReason(for: path, timeout: ruleContract.budget.activityProbeTimeout) {
+            return activityReason
+        }
 
         let resolved = MolePathResolver.resolve(target.path, home: home)
         if target.kind.requiresExistingLiteralPath && !FileManager.default.fileExists(atPath: resolved) {
@@ -788,8 +909,9 @@ public struct TargetScanner: Sendable {
         }
 
         let measured = FileTreeMeasurement.read(URL(fileURLWithPath: path),
-            entryLimit: measurementEntryLimit, timeout: measurementTimeout,
-            stopAtSafetyEvidence: true, whitelist: whitelist)
+            entryLimit: ruleContract.budget.entryLimit, timeout: ruleContract.budget.measurementTimeout,
+            stopAtSafetyEvidence: true, whitelist: whitelist,
+            policy: ruleContract.evidencePolicy, containmentRoot: ruleContract.containmentRoot)
         if let protectedPath = measured.protectedPath {
             return "Protected data at \(protectedPath) requires retaining this item."
         }
@@ -851,16 +973,24 @@ public struct TargetScanner: Sendable {
 
     /// Why this target must wait, or nil when it is clear to clean.
     private func blockedByRunningProcess(_ target: CleanTarget) -> ProcessGuardBlock? {
+        blockedByRunningProcess(target, names: runningProcessNames, paths: runningProcessPaths)
+    }
+
+    /// Same check against an explicitly supplied inventory, used by the removal
+    /// bracket with a freshly fetched one.
+    private func blockedByRunningProcess(
+        _ target: CleanTarget, names: Set<String>?, paths: Set<String>?
+    ) -> ProcessGuardBlock? {
         guard let guardSpec = target.processGuard else { return nil }
         let exactNames = guardSpec.exactProcessNames.map { $0.lowercased() }
         if !exactNames.isEmpty {
-            guard let runningProcessNames else { return .unknown(guardSpec.family) }
-            if exactNames.contains(where: runningProcessNames.contains) { return .active(guardSpec.family) }
+            guard let names else { return .unknown(guardSpec.family) }
+            if exactNames.contains(where: names.contains) { return .active(guardSpec.family) }
         }
         let pathSubstrings = guardSpec.pathSubstrings.map { $0.lowercased() }
         if !pathSubstrings.isEmpty {
-            guard let runningProcessPaths else { return .unknown(guardSpec.family) }
-            if runningProcessPaths.contains(where: { path in
+            guard let paths else { return .unknown(guardSpec.family) }
+            if paths.contains(where: { path in
                 pathSubstrings.contains(where: path.contains)
             }) { return .active(guardSpec.family) }
         }

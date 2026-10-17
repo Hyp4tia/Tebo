@@ -95,6 +95,84 @@ public enum MolePruneRule: Sendable, Equatable {
     case keepNewest(keepCount: Int)
 }
 
+// MARK: Scan budget
+
+/// Per-rule work ceilings for measurement walks and activity probes.
+/// A cap, not a target: small items finish as fast as before; only genuinely
+/// huge tool caches use the upper bound, and everything stays cancellable.
+public struct MoleScanBudget: Sendable, Equatable {
+    public let entryLimit: Int
+    public let measurementTimeout: TimeInterval
+    public let activityProbeTimeout: TimeInterval
+
+    public init(entryLimit: Int, measurementTimeout: TimeInterval, activityProbeTimeout: TimeInterval) {
+        self.entryLimit = entryLimit
+        self.measurementTimeout = measurementTimeout
+        self.activityProbeTimeout = activityProbeTimeout
+    }
+
+    /// The historical strict default: small, tightly bounded walks.
+    public static let standard = MoleScanBudget(entryLimit: 50_000, measurementTimeout: 4, activityProbeTimeout: 3)
+    /// Multi-GB tool-generated caches (Xcode DerivedData, DeviceSupport, simulator
+    /// and package-manager caches). 1M entries matches the largest measured trees.
+    public static let bulk = MoleScanBudget(entryLimit: 1_000_000, measurementTimeout: 90, activityProbeTimeout: 30)
+}
+
+// MARK: Evidence policy
+
+/// Which safety-evidence classes a reviewed rule may tolerate.
+/// `.strict` keeps every item carrying repository, credential or symlink evidence.
+/// Tool-generated cache families opt in to the narrow tolerances their real
+/// content requires, each with positive and negative regression coverage.
+public struct MoleEvidencePolicy: Sendable, Equatable {
+    /// Symlinks whose targets resolve inside the rule root are tool-internal.
+    /// Deleting the item removes the link, never the target; escapes stay blocking.
+    public let toleratesRootContainedSymlinks: Bool
+    /// Repository markers below one of these path fragments are dependency
+    /// checkouts (re-fetched on next resolve), not user repositories.
+    public let toleratedRepositoryFragments: [String]
+    /// Exact lowercased file names that are build-product payloads, not credentials.
+    public let toleratedCredentialNames: [String]
+
+    public init(toleratesRootContainedSymlinks: Bool = false,
+                toleratedRepositoryFragments: [String] = [],
+                toleratedCredentialNames: [String] = []) {
+        self.toleratesRootContainedSymlinks = toleratesRootContainedSymlinks
+        self.toleratedRepositoryFragments = toleratedRepositoryFragments
+        self.toleratedCredentialNames = toleratedCredentialNames
+    }
+
+    /// Current behavior: every evidence class blocks.
+    public static let strict = MoleEvidencePolicy()
+    /// Package-manager and simulator caches: internal links are expected.
+    public static let developerCache = MoleEvidencePolicy(toleratesRootContainedSymlinks: true)
+    /// Xcode build caches: SwiftPM dependency checkouts and embedded provisioning
+    /// payloads are build outputs, not user state.
+    public static let xcodeBuildCache = MoleEvidencePolicy(
+        toleratesRootContainedSymlinks: true,
+        toleratedRepositoryFragments: ["/SourcePackages/checkouts/"],
+        toleratedCredentialNames: ["embedded.mobileprovision"])
+}
+
+// MARK: Rule contract
+
+/// The resolved scan contract of one rule: the work ceiling, the evidence
+/// tolerances and the literal root that tolerated symlinks must stay inside.
+/// Discovery and removal resolve the same values from the same target, so a
+/// row that passed the scan boundary revalidates against identical terms.
+/// Pure layout math, usable from the removal sink without owning a scanner.
+public struct MoleRuleContract: Sendable, Equatable {
+    public let budget: MoleScanBudget
+    public let evidencePolicy: MoleEvidencePolicy
+    public let containmentRoot: String?
+
+    public init(budget: MoleScanBudget, evidencePolicy: MoleEvidencePolicy, containmentRoot: String?) {
+        self.budget = budget
+        self.evidencePolicy = evidencePolicy
+        self.containmentRoot = containmentRoot
+    }
+}
+
 // MARK: Process guard
 
 /// An app/process that must NOT be running while this target is cleaned.
@@ -105,15 +183,20 @@ public struct MoleProcessGuard: Sendable, Equatable {
     public let family: String
     public let exactProcessNames: [String]
     public let pathSubstrings: [String]
+    /// True for guard families Mole brackets around a
+    /// `simctl list devices booted -j` probe (simulator-owned data).
+    public let probesBootedSimulator: Bool
 
     public init(
         family: String,
         exactProcessNames: [String] = [],
-        pathSubstrings: [String] = []
+        pathSubstrings: [String] = [],
+        probesBootedSimulator: Bool = false
     ) {
         self.family = family
         self.exactProcessNames = exactProcessNames
         self.pathSubstrings = pathSubstrings
+        self.probesBootedSimulator = probesBootedSimulator
     }
 
     /// Common case: one exact process name, same as the family label.
@@ -146,6 +229,10 @@ public struct CleanTarget: Sendable, Equatable {
     public let processGuard: MoleProcessGuard?
     /// Subset-selection rule (browser old versions, stale segments).
     public let pruneRule: MolePruneRule?
+    /// Per-rule work ceiling for measurement walks and activity probes.
+    public let scanBudget: MoleScanBudget
+    /// Which safety-evidence classes this reviewed rule may tolerate.
+    public let evidencePolicy: MoleEvidencePolicy
     /// Report-only rows are shown for review but never deleted (e.g. Trash).
     public let reportOnly: Bool
     /// Upstream citation, e.g. "mole lib/clean/user.sh:1695".
@@ -162,6 +249,8 @@ public struct CleanTarget: Sendable, Equatable {
         explanation: String,
         processGuard: MoleProcessGuard? = nil,
         pruneRule: MolePruneRule? = nil,
+        scanBudget: MoleScanBudget = .standard,
+        evidencePolicy: MoleEvidencePolicy = .strict,
         reportOnly: Bool = false,
         source: String
     ) {
@@ -175,6 +264,8 @@ public struct CleanTarget: Sendable, Equatable {
         self.explanation = explanation
         self.processGuard = processGuard
         self.pruneRule = pruneRule
+        self.scanBudget = scanBudget
+        self.evidencePolicy = evidencePolicy
         self.reportOnly = reportOnly
         self.source = source
     }
@@ -209,9 +300,10 @@ public struct CleanTarget: Sendable, Equatable {
         let processIdentity = processGuard.map {
             "\($0.family)|\($0.exactProcessNames.sorted().joined(separator: ","))|\($0.pathSubstrings.sorted().joined(separator: ","))"
         } ?? "unguarded"
+        let bootedSuffix = processGuard?.probesBootedSimulator == true ? "|booted" : ""
         let sourceIdentity = source.range(of: #":[0-9]+$"#, options: .regularExpression)
             .map { String(source[..<$0.lowerBound]) } ?? source
-        let components = [group.rawValue, label, pathIdentity, kindIdentity, pruneIdentity, processIdentity, sourceIdentity]
+        let components = [group.rawValue, label, pathIdentity, kindIdentity, pruneIdentity, processIdentity + bootedSuffix, sourceIdentity]
         return "mole:" + components.map(Self.ruleIDComponent).joined(separator: ":")
     }
 
@@ -220,6 +312,30 @@ public struct CleanTarget: Sendable, Equatable {
         if let encoded = value.addingPercentEncoding(withAllowedCharacters: allowed) { return encoded }
         return Data(value.utf8).base64EncodedString().replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "=", with: "")
+    }
+
+    /// Budget, policy and literal root resolved together. The scan boundary and
+    /// the removal boundary both go through this, so they never disagree.
+    public func contract(home: String = NSHomeDirectory()) -> MoleRuleContract {
+        MoleRuleContract(budget: scanBudget, evidencePolicy: evidencePolicy,
+                         containmentRoot: Self.containmentRoot(for: path, home: home))
+    }
+
+    /// Literal prefix of the rule path before its first wildcard component:
+    /// the root a tolerated symlink's target must stay inside. nil when the
+    /// prefix cannot contain anything (wildcard first, or the filesystem root).
+    public static func containmentRoot(for path: MolePath, home: String) -> String? {
+        let resolved = MolePathResolver.resolve(path, home: home)
+        let components = resolved.split(separator: "/").map(String.init)
+        if let firstPattern = components.firstIndex(where: {
+            $0.contains("*") || $0.contains("?") || $0.contains("[")
+        }) {
+            guard firstPattern > 0 else { return nil }
+            let normalized = SafetyGate.normalized("/" + components.prefix(firstPattern).joined(separator: "/"))
+            return normalized == "/" ? nil : normalized
+        }
+        let normalized = SafetyGate.normalized(resolved)
+        return normalized == "/" ? nil : normalized
     }
 }
 

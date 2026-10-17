@@ -143,7 +143,7 @@ struct MoleRuleSafetyTests {
     @Test("Every runtime Mole target has a unique stable rule id")
     func ruleIDsAreUniqueAcrossRuntimeTargets() {
         let ids = MoleTables.allTargets.map { $0.ruleID }
-        #expect(ids.count == 469)
+        #expect(ids.count == 474)
         #expect(Set(ids).count == ids.count)
         #expect(ids.allSatisfy { $0.hasPrefix("mole:") })
     }
@@ -373,7 +373,61 @@ struct MoleRuleSafetyTests {
         let selectableSafe = MoleTables.allTargets.filter {
             $0.eligibility == .rebuildableCache && !$0.needsAdmin && !$0.reportOnly && $0.risk == .safe
         }
-        #expect(Set(selectableSafe.map(\.label)) == ["Chrome code cache", "Chrome GPU cache"])
+        // Pinned by name: a promotion anywhere fails this test until it is
+        // listed here deliberately. Chrome plus every promoted developer row.
+        let chrome: Set<String> = ["Chrome code cache", "Chrome GPU cache"]
+        let promotedDeveloperTools: Set<String> = [
+            "Xcode DerivedData", "Xcode build products",
+            "Simulator caches", "Simulator temp files", "CoreSimulator logs",
+            "Xcode XCTestDevices", "Simulator runtime cache",
+            "iOS DeviceSupport old versions", "watchOS DeviceSupport old versions",
+            "tvOS DeviceSupport old versions", "visionOS DeviceSupport old versions",
+            "iOS DeviceSupport symbol caches", "watchOS DeviceSupport symbol caches",
+            "tvOS DeviceSupport symbol caches", "visionOS DeviceSupport symbol caches",
+            "iOS DeviceSupport logs", "watchOS DeviceSupport logs",
+            "tvOS DeviceSupport logs", "visionOS DeviceSupport logs",
+            "Xcode Interface Builder cache",
+            "Android Studio cache", "Android build cache", "Android SDK cache",
+            "Swift package manager cache", "Swift package manager library cache",
+            "Expo Go cache", "Expo Android APK cache", "Expo iOS simulator app cache",
+            "Expo native modules cache", "Expo schema cache", "Expo template cache", "Expo versions cache",
+            "npm cache directory", "npm npx cache", "npm logs", "npm prebuilds",
+            "tnpm cache directory", "tnpm logs", "Yarn cache", "Yarn v1 cache",
+            "bun cache", "Corepack cache",
+            "pip cache", "uv cache", "pyenv cache", "Poetry cache",
+            "Poetry artifacts cache", "Poetry package cache", "Ruff cache", "MyPy cache",
+            "Pytest cache", "Jupyter runtime cache",
+            "Rust cargo cache", "Rustup downloads cache",
+            "rbenv download cache", "gem spec cache", "gem package cache", "Ruby Bundler cache",
+            "mise cache", "Homebrew downloads cache", "Docker BuildX cache",
+        ]
+        #expect(Set(selectableSafe.map(\.label)) == chrome.union(promotedDeveloperTools))
+        #expect(selectableSafe.count == 63)
+    }
+
+    @Test("Promoted developer rows carry their full explicit contract")
+    func promotedDeveloperRowsCarryContracts() {
+        let promoted = DeveloperTools.all.filter { $0.eligibility == .rebuildableCache }
+        #expect(promoted.count == 61)
+        for row in promoted {
+            #expect(!row.reportOnly && !row.needsAdmin, "\(row.label) must be directly removable")
+            #expect(row.scanBudget == .bulk, "\(row.label) must carry the bulk tier")
+            #expect(row.evidencePolicy != .strict, "\(row.label) must state its evidence tolerances")
+        }
+        // Tool-family rows keep their process guard; package caches are
+        // documented as guardless, the same way Mole treats them.
+        for row in promoted {
+            let toolFamily = ["Xcode", "Simulator", "CoreSimulator", "iOS DeviceSupport", "watchOS DeviceSupport",
+                              "tvOS DeviceSupport", "visionOS DeviceSupport"].contains {
+                row.label.hasPrefix($0)
+            }
+            if toolFamily { #expect(row.processGuard != nil, "\(row.label) needs a process guard") }
+        }
+        // The two Xcode build caches carry the checkout-tolerance policy; the
+        // remaining rows only tolerate root-contained links.
+        for row in promoted where ["Xcode DerivedData", "Xcode build products"].contains(row.label) {
+            #expect(row.evidencePolicy == .xcodeBuildCache)
+        }
     }
 
     @Test("Supported Chrome caches require idle ownership and never include offline storage")

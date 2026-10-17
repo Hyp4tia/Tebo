@@ -2,18 +2,31 @@
 
 ## Current work
 
+[Developer Tools cache reliability](.hermes/plans/2026-10-17_230618-dev-cache-reliability.md)
+passes the current full gate: build, 333 tests in 46 suites and the headless
+self-test. 61 reviewed Developer Tools rules gained explicit rebuildable-cache
+contracts (their own scan budgets, scoped evidence policies and Mole-parity
+process guards), so a dev disk that fills up produces selectable, recommended
+rows again, with only the Xcode cache under a `com.apple.` path and pnpm's store
+kept read-only. A read-only native probe listed 40 developer rows (about 314 MB)
+on the real home with zero Trash calls, and a 52,000-entry DerivedData-shaped
+fixture was recommended while Xcode tooling was idle and deferred with "Xcode is
+running" while it was not. An independent adversarial review found no
+removal-safety defect; it confirmed the documented checkout tolerance and the
+Mole-parity probe substring, and its sink-self-sufficiency suggestion is applied
+and tested. 63 table rules allow automatic recommendations, two require manual
+review and 409 stay read-only. Media hardening is deferred. The
+installed/public 1.2 app is unchanged. These changes affect source only; no
+corrective app release or installed-app replacement is included.
+
 [Mole safety hardening](.hermes/plans/2026-10-16_022302-safety-hardening.md)
-passes the current full gate: build, 315 tests in 42 suites and self-test.
+passes the current full gate: build, tests and self-test.
 The separate requested review and follow-up are reconciled: the confirmed
 reporting defect is fixed, with no new confirmed defect. The task plan owns
 the detailed report and limits. Renewed native checks verified refusal reporting,
 read-only settlement, a positive Trash move, Preview restoration and byte-exact
 Finder recovery. The specific Finder Put Back UI action remains unverified after
 automation failures; direct recovery is not a substitute for that acceptance.
-Only two table rules allow automatic recommendations;
-five require manual review and 462 stay read-only. Media hardening is deferred.
-The installed/public 1.2 app is unchanged. These changes affect source only;
-no corrective app release or installed-app replacement is included.
 
 ### Existing shipped state
 

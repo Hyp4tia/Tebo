@@ -139,4 +139,46 @@ struct DeletePipelineTests {
         #expect(!FileManager.default.fileExists(atPath: good.path))
         #expect(FileManager.default.fileExists(atPath: whitelisted.path))
     }
+
+    @Test("The cleanup sink's own measurement keeps an escaping link and passes a contained one")
+    func cleanupSinkRevalidatesWithContract() async throws {
+        let dir = makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Unique leaf so the Trash cleanup below cannot touch a real user item.
+        let item = dir.appendingPathComponent("cache-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: item, withIntermediateDirectories: true)
+        try Data("payload".utf8).write(to: item.appendingPathComponent("data.bin"))
+        try FileManager.default.createSymbolicLink(
+            atPath: item.appendingPathComponent("escape").path,
+            withDestinationPath: dir.appendingPathComponent("outside.bin").path)
+
+        // The nil-returning validator isolates the sink's own measurement:
+        // only cleanupSize and the open-handle probe stand in front of the move.
+        func trash(_ path: String) async -> DeleteReport {
+            await DeletePipeline().trash(
+                paths: [path], whitelist: [],
+                expectedIdentities: [path: FileIdentity.read(path: path)].compactMapValues { $0 },
+                expectedBindings: [path: PathBinding.read(path: path)].compactMapValues { $0 },
+                requirePreviewIdentity: true, enforceCleanupSafety: true,
+                additionalValidation: { _ in nil },
+                ruleContract: { _ in
+                    MoleRuleContract(budget: .bulk, evidencePolicy: .developerCache, containmentRoot: item.path)
+                })
+        }
+
+        let escaping = await trash(item.path)
+        #expect(escaping.skippedCount == 1)
+        #expect(FileManager.default.fileExists(atPath: item.path))
+
+        // A link that stays inside the contract's root is tolerated, and the
+        // item then moves exactly once.
+        try FileManager.default.removeItem(at: item.appendingPathComponent("escape"))
+        try FileManager.default.createSymbolicLink(
+            atPath: item.appendingPathComponent("contained").path, withDestinationPath: "data.bin")
+        defer { try? FileManager.default.removeItem(at: trashedLocation(of: item)) }
+        let contained = await trash(item.path)
+        #expect(contained.trashedCount == 1)
+        #expect(!FileManager.default.fileExists(atPath: item.path))
+    }
 }

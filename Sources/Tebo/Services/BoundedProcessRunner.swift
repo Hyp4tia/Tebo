@@ -13,8 +13,8 @@ import Foundation
 // timeout nil means no deadline: an engine scan of a large tree legitimately runs for minutes and
 // the user can cancel it. Every bounded call site passes a value.
 
-enum BoundedProcessRunner {
-    struct Result: Sendable {
+public enum BoundedProcessRunner {
+    public struct Result: Sendable {
         let terminationStatus: Int32?  // nil = launch failed
         let stdout: String
         let stderr: String

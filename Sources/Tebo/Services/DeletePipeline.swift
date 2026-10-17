@@ -116,7 +116,11 @@ public struct DeletePipeline: Sendable {
         enforceCleanupSafety: Bool = false,
         protectionURL: URL? = nil,
         additionalValidation: (@Sendable (String) async -> String?)? = nil,
-        beforeMove: (@Sendable (String) async -> Void)? = nil
+        beforeMove: (@Sendable (String) async -> Void)? = nil,
+        /// Per-path rule contract from the row's producing source. The sink
+        /// re-measures with the same budget, policy and containment root the
+        /// scan used; nil keeps the strict historical defaults.
+        ruleContract: (@Sendable (String) -> MoleRuleContract?)? = nil
     ) async -> DeleteReport {
         var outcomes: [DeleteReport.Outcome] = []
         outcomes.reserveCapacity(paths.count)
@@ -135,7 +139,7 @@ public struct DeletePipeline: Sendable {
                     expectedIdentity: expectedIdentities[path], expectedBinding: expectedBindings[path],
                     requirePreviewIdentity: requirePreviewIdentity || enforceCleanupSafety,
                     enforceCleanupSafety: enforceCleanupSafety, protections: protections, protectionURL: protectionURL,
-                    additionalValidation: additionalValidation, beforeMove: beforeMove)
+                    additionalValidation: additionalValidation, beforeMove: beforeMove, ruleContract: ruleContract)
             )
         }
         return DeleteReport(outcomes: outcomes)
@@ -153,7 +157,8 @@ public struct DeletePipeline: Sendable {
         protections: WhitelistStore.Snapshot?,
         protectionURL: URL?,
         additionalValidation: (@Sendable (String) async -> String?)?,
-        beforeMove: (@Sendable (String) async -> Void)?
+        beforeMove: (@Sendable (String) async -> Void)?,
+        ruleContract: (@Sendable (String) -> MoleRuleContract?)?
     ) async -> DeleteReport.Outcome {
         // 1. Gate: string rules + symlink resolution + inode guards.
         if let reason = PathValidator.validate(path: path, whitelist: whitelist) {
@@ -192,15 +197,17 @@ public struct DeletePipeline: Sendable {
         guard !Task.isCancelled else {
             return DeleteReport.Outcome(path: path, result: .skipped(reason: .cancelled))
         }
+        let contract = ruleContract?(path)
         if enforceCleanupSafety {
             guard additionalValidation != nil else {
                 return DeleteReport.Outcome(path: path, result: .skipped(reason: .safetyCheck("Cleanup rule evidence is missing; rescan before removal.")))
             }
-            guard let measuredBytes = cleanupSize(path: path, whitelist: whitelist) else {
+            guard let measuredBytes = cleanupSize(path: path, whitelist: whitelist, contract: contract) else {
                 return DeleteReport.Outcome(path: path, result: .skipped(reason: .safetyCheck("Protected content or incomplete evidence; item kept.")))
             }
             bytes = measuredBytes
-            if let reason = await CleanupActivityGuard.reason(for: path) {
+            let probeTimeout = contract?.budget.activityProbeTimeout ?? MoleScanBudget.standard.activityProbeTimeout
+            if let reason = await CleanupActivityGuard.reason(for: path, timeout: probeTimeout) {
                 return DeleteReport.Outcome(path: path, result: .skipped(reason: .safetyCheck(reason)))
             }
         }
@@ -229,7 +236,7 @@ public struct DeletePipeline: Sendable {
 
         // Awaited probes allow nested changes that do not change the parent's binding.
         if enforceCleanupSafety {
-            guard let measuredBytes = cleanupSize(path: path, whitelist: whitelist) else {
+            guard let measuredBytes = cleanupSize(path: path, whitelist: whitelist, contract: contract) else {
                 return DeleteReport.Outcome(path: path, result: .skipped(reason: .safetyCheck("Protected content or incomplete evidence; item kept.")))
             }
             bytes = measuredBytes
@@ -263,10 +270,17 @@ public struct DeletePipeline: Sendable {
         }
     }
 
-    private func cleanupSize(path: String, whitelist: Set<String>) -> Int64? {
-        let measured = FileTreeMeasurement.read(URL(fileURLWithPath: path), stopAtSafetyEvidence: true, whitelist: whitelist)
+    private func cleanupSize(path: String, whitelist: Set<String>, contract: MoleRuleContract?) -> Int64? {
+        let budget = contract?.budget ?? .standard
+        let measured = FileTreeMeasurement.read(URL(fileURLWithPath: path),
+            entryLimit: budget.entryLimit, timeout: budget.measurementTimeout,
+            stopAtSafetyEvidence: true, whitelist: whitelist,
+            policy: contract?.evidencePolicy ?? .strict, containmentRoot: contract?.containmentRoot)
+        // Mirror removalProtectionReason's full evidence set so the sink stays
+        // self-sufficient even if the mandatory-validator contract ever relaxes.
         guard measured.status == .complete, measured.protectedPath == nil,
-              !measured.containsRepository, !measured.containsCredentials else { return nil }
+              !measured.containsRepository, !measured.containsCredentials,
+              !measured.containsSymbolicLinks, !measured.containsCloudPlaceholders else { return nil }
         return measured.bytes
     }
 }

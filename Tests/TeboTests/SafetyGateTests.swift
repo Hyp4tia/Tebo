@@ -261,4 +261,20 @@ struct PathValidatorTests {
                 == .whitelisted
         )
     }
+
+    @Test("Home-relative mandatory trees anchor at the user Library, not at any deep Library")
+    func mandatoryTreeAnchorIsTheUserLibrary() {
+        // Ancestors of protected descendants inside the user Library stay denied.
+        for denied in ["/Users/test/Library", "/Users/test/Library/Caches",
+                       "/Users/test/Library/Caches/CloudKit", "/Users/test/Library/Mobile Documents"] {
+            #expect(!SafetyGate.isAllowed(path: denied, whitelist: []), "\(denied) must stay denied")
+        }
+        // A deep directory literally named Library is tool content, not the
+        // user Library: iOS DeviceSupport keeps its payload under
+        // Symbols/System/Library inside every version directory.
+        for allowed in ["/Users/test/Library/Developer/Xcode/iOS DeviceSupport/16.0 (20A)/Symbols/System/Library",
+                        "/Users/test/Library/Developer/Xcode/iOS DeviceSupport/16.0 (20A)/Symbols/System/Library/Caches/x.bin"] {
+            #expect(SafetyGate.isAllowed(path: allowed, whitelist: []), "\(allowed) must stay allowed")
+        }
+    }
 }

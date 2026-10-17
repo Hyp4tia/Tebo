@@ -533,6 +533,7 @@ struct ScanTab<ExtraInfo: View>: View {
         let reviewedByPath = Dictionary(uniqueKeysWithValues: selectedRows.map { ($0.path, $0) })
         let validator = moleRemovalValidator
         let manualAnalyze = tabID == "analyze"
+        let targetsByRuleID = MoleTables.allTargets.reduce(into: [String: CleanTarget]()) { $0[$1.ruleID] = $1 }
         let operationID = UUID()
         removalRequestID = operationID
         isRemoving = true
@@ -557,6 +558,14 @@ struct ScanTab<ExtraInfo: View>: View {
                         return "The reviewed cleanup source is missing; item kept."
                     }
                     return await validator(row, review.whitelist)
+                },
+                ruleContract: { path in
+                    // The sink re-measures with the row's own contract; rows
+                    // without a Mole rule keep the strict historical defaults.
+                    guard !manualAnalyze, let row = reviewedByPath[path],
+                          case .moleRule(let ruleID) = row.cleanupSource,
+                          let target = targetsByRuleID[ruleID] else { return nil }
+                    return target.contract()
                 }
             )
             activity.recordRemoval(report)

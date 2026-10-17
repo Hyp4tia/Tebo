@@ -340,4 +340,39 @@ struct TargetScannerTests {
         #expect(detail.contains("/Volumes"), "the advisory must still say where the row points")
         #expect(!detail.contains("("), "a whole-volume row must not carry a measured size")
     }
+
+    @Test("An unreadable kernel name falls back to the executable path; only an unaccounted pid is unknown")
+    func inventoryFactsMerge() {
+        // Other users' processes deny proc_name (EPERM), but their executable
+        // path still identifies them, the same signal Mole's pgrep -x uses.
+        let identified = TargetScanner.inventory(from: [
+            TargetScanner.ProcessFacts(name: nil, executablePath: "/Applications/Xcode.app/Contents/MacOS/Xcode"),
+        ])
+        #expect(identified.names == Set(["xcode"]))
+        #expect(identified.executablePaths == Set(["/applications/xcode.app/contents/macos/xcode"]))
+
+        // A name-only pid still identifies the process; only the path field
+        // stays unknown for it.
+        let nameOnly = TargetScanner.inventory(from: [
+            TargetScanner.ProcessFacts(name: "xcodebuild", executablePath: nil),
+        ])
+        #expect(nameOnly.names == Set(["xcodebuild"]))
+        #expect(nameOnly.executablePaths == nil)
+
+        // A pid with neither name nor path leaves both fields unknown, so
+        // guarded rows keep failing closed.
+        let unaccounted = TargetScanner.inventory(from: [
+            TargetScanner.ProcessFacts(name: nil, executablePath: "/bin/zsh"),
+            TargetScanner.ProcessFacts(name: nil, executablePath: nil),
+        ])
+        #expect(unaccounted.names == nil)
+        #expect(unaccounted.executablePaths == nil)
+
+        // Unknown name with a known path keeps the path inventory usable.
+        let partial = TargetScanner.inventory(from: [
+            TargetScanner.ProcessFacts(name: nil, executablePath: "/usr/bin/true"),
+        ])
+        #expect(partial.names == Set(["true"]))
+        #expect(partial.executablePaths == Set(["/usr/bin/true"]))
+    }
 }

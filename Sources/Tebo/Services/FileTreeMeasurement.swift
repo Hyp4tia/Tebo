@@ -17,7 +17,8 @@ struct FileTreeMeasurement: Sendable {
     static func isDataless(flags: UInt32) -> Bool { flags & UInt32(SF_DATALESS) != 0 }
 
     static func read(_ url: URL, entryLimit: Int = 50_000, timeout: TimeInterval = 4,
-                     stopAtSafetyEvidence: Bool = false, whitelist: Set<String> = []) -> Self {
+                     stopAtSafetyEvidence: Bool = false, whitelist: Set<String> = [],
+                     policy: MoleEvidencePolicy = .strict, containmentRoot: String? = nil) -> Self {
         var result = Self()
         let fm = FileManager.default
         var rootInfo = stat()
@@ -43,7 +44,7 @@ struct FileTreeMeasurement: Sendable {
                 result.status = .unavailable; return result
             }
             result.bytes = Int64(size); result.fileCount = 1
-            result.containsCredentials = credentialName(url.lastPathComponent)
+            result.containsCredentials = credentialName(url.lastPathComponent, tolerated: policy.toleratedCredentialNames)
             return result
         }
         let deadline = Date.now.addingTimeInterval(timeout)
@@ -70,11 +71,13 @@ struct FileTreeMeasurement: Sendable {
                     result.protectedPath = child.path
                     if stopAtSafetyEvidence { result.status = .partial; return result }
                 }
-                if [".git", ".hg", ".svn"].contains(name) {
+                if [".git", ".hg", ".svn"].contains(name),
+                   !policy.toleratedRepositoryFragments.contains(where: { child.path.contains($0) }) {
                     result.containsRepository = true
                     if stopAtSafetyEvidence { result.status = .partial; return result }
                 }
-                result.containsCredentials = result.containsCredentials || credentialName(name)
+                result.containsCredentials = result.containsCredentials
+                    || credentialName(name, tolerated: policy.toleratedCredentialNames)
                 if stopAtSafetyEvidence && result.containsCredentials { result.status = .partial; return result }
                 var info = stat()
                 guard lstat(child.path, &info) == 0 else { result.status = .partial; continue }
@@ -85,6 +88,11 @@ struct FileTreeMeasurement: Sendable {
                     result.status = .partial; continue
                 }
                 if values.isSymbolicLink == true {
+                    // A tolerated link must resolve (lexically) inside the rule root;
+                    // deleting the item removes the link itself, never its target.
+                    if policy.toleratesRootContainedSymlinks, linkIsContained(child, in: containmentRoot) {
+                        continue
+                    }
                     result.containsSymbolicLinks = true
                     if stopAtSafetyEvidence { result.status = .partial; return result }
                     continue
@@ -107,8 +115,23 @@ struct FileTreeMeasurement: Sendable {
         return result
     }
 
-    private static func credentialName(_ name: String) -> Bool {
+    /// Lexically resolves a symlink target (readlink only, never follows the link)
+    /// and reports whether it stays inside the rule root. Failures fail closed.
+    private static func linkIsContained(_ child: URL, in containmentRoot: String?) -> Bool {
+        guard let root = containmentRoot, !root.isEmpty else { return false }
+        guard let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: child.path),
+              !destination.isEmpty else { return false }
+        let resolved = destination.hasPrefix("/")
+            ? URL(fileURLWithPath: destination).standardizedFileURL.path
+            : child.deletingLastPathComponent().appendingPathComponent(destination).standardizedFileURL.path
+        let normalizedRoot = SafetyGate.normalized(root)
+        let normalizedLink = SafetyGate.normalized(resolved)
+        return normalizedLink == normalizedRoot || normalizedLink.hasPrefix(normalizedRoot + "/")
+    }
+
+    private static func credentialName(_ name: String, tolerated: [String] = []) -> Bool {
         let lower = name.lowercased()
+        if tolerated.contains(lower) { return false }
         return ["pem", "key", "p12", "pfx", "keystore", "jks", "mobileprovision"].contains((lower as NSString).pathExtension)
             || lower == ".env" || lower.hasPrefix(".env.") || lower == "id_rsa" || lower == "id_ed25519"
             || lower == "keypair.json" || lower.hasSuffix("-keypair.json")
