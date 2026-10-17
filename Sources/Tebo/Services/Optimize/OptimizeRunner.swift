@@ -49,7 +49,8 @@ public struct OptimizeRunner: Sendable {
     ) async -> OptimizeTaskResult {
         let log = recordLine ?? { await OperationLog.shared.record($0) }
         await log("Optimize \(task.id): started")
-        if protectedPatterns.contains(where: { !$0.isEmpty && (task.id.localizedCaseInsensitiveContains($0)
+        // An unreadable policy protects every path with "/"; action IDs have no slash to match.
+        if protectedPatterns.contains("/") || protectedPatterns.contains(where: { !$0.isEmpty && (task.id.localizedCaseInsensitiveContains($0)
             || task.title.localizedCaseInsensitiveContains($0)) }) {
             await log("Optimize \(task.id): protected, skipped")
             return .skippedProtected

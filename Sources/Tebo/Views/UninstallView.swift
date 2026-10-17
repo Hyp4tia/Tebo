@@ -18,7 +18,7 @@ struct UninstallView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top) {
-                MolePageHeading(title: "Uninstall", detail: "Review an app and the files that belong to it", symbol: "app.badge")
+                MolePageHeading(title: "Uninstall", detail: "Move the app bundle to Trash. Related user data stays read-only", symbol: "app.badge")
                 Spacer()
                 if plan != nil {
                     Button("All apps") { plan = nil; note = nil }
@@ -29,6 +29,17 @@ struct UninstallView: View {
             if loading {
                 HStack(spacing: 10) { ProgressView().controlSize(.small); Text("Reading installed apps…").font(.callout) }
             }
+            if let error = appState.protectionError {
+                HStack(alignment: .center, spacing: 10) {
+                    Label("Protected locations could not be verified: \(error)", systemImage: "exclamationmark.shield")
+                        .font(.caption).foregroundStyle(.orange).textSelection(.enabled)
+                    Spacer()
+                    Button("Reload protections") {
+                        appState.reloadProtections()
+                        note = appState.protectionError.map { "Protection reload failed: \($0)" }
+                    }
+                }
+            }
             if let plan { planContent(plan) }
             else { inventory }
         }
@@ -37,6 +48,7 @@ struct UninstallView: View {
         .onDisappear { planTask?.cancel() }
         .confirmationDialog("Move the selected app and related files to the Trash?", isPresented: $showConfirmation, titleVisibility: .visible) {
             Button("Move to Trash", role: .destructive) { performUninstall() }
+                .disabled(appState.protectionError != nil)
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("\(selectedPaths.count) reviewed items. You can recover them from the Trash.")
@@ -50,8 +62,12 @@ struct UninstallView: View {
                 LazyVStack(spacing: 9) {
                     ForEach(apps.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.bundleID.localizedCaseInsensitiveContains(search) }) { app in
                         HStack(spacing: 12) {
-                            Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
-                                .resizable().frame(width: 38, height: 38)
+                            if app.protectedReason?.localizedCaseInsensitiveContains("cloud-managed") == true {
+                                Image(systemName: "icloud").font(.system(size: 28)).frame(width: 38, height: 38)
+                            } else {
+                                Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
+                                    .resizable().frame(width: 38, height: 38)
+                            }
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(app.name).font(.callout.weight(.medium))
                                 Text(app.version.map { "Version \($0)" } ?? app.bundleID)
@@ -61,7 +77,8 @@ struct UninstallView: View {
                             if let reason = app.protectedReason {
                                 Image(systemName: "lock").foregroundStyle(.secondary).help(reason)
                             }
-                            Button("Review") { prepare(app) }.disabled(app.protectedReason != nil || loading)
+                            Button("Review") { prepare(app) }
+                                .disabled(app.protectedReason != nil || loading || appState.protectionError != nil)
                         }.teboCard(padding: 12)
                     }
                     if apps.isEmpty && !loading {
@@ -127,7 +144,7 @@ struct UninstallView: View {
                 } label: {
                     Label(appState.dryRunEnabled ? "Preview uninstall" : "Move to Trash", systemImage: appState.dryRunEnabled ? "eye" : "trash")
                 }
-                .buttonStyle(TeboPrimaryButtonStyle()).disabled(selectedPaths.isEmpty || removing)
+                .buttonStyle(TeboPrimaryButtonStyle()).disabled(selectedPaths.isEmpty || removing || appState.protectionError != nil)
             }
         }
     }
@@ -143,36 +160,47 @@ struct UninstallView: View {
         Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
     }
     private func prepare(_ app: InstalledApplication) {
-        loading = true; note = nil
-        let running = runningIDs(), whitelist = appState.whitelist
-        let started = Date.now
-        planTask?.cancel()
-        planTask = Task {
-            let found = await uninstaller.plan(for: app, whitelist: whitelist, runningBundleIDs: running)
-            guard !Task.isCancelled else { return }
-            plan = found; selectedPaths = Set(found.rows.filter { $0.path == app.path }.map(\.path))
-            if found.rows.isEmpty { appState.resultsByTab.removeValue(forKey: "uninstall") }
-            else { appState.resultsByTab["uninstall"] = found.rows }
-            activity.recordScan(started: started)
-            await OperationLog.shared.record("Uninstall \(app.name): reviewed \(found.rows.count) items")
-            loading = false
+        guard let error = appState.refreshProtections() else {
+            loading = true; note = nil
+            let running = runningIDs(), whitelist = appState.whitelist
+            let started = Date.now
+            planTask?.cancel()
+            planTask = Task {
+                let found = await uninstaller.plan(for: app, whitelist: whitelist, runningBundleIDs: running)
+                guard !Task.isCancelled else { return }
+                plan = found; selectedPaths = Set(found.rows.filter { $0.path == app.path }.map(\.path))
+                if found.rows.isEmpty { appState.resultsByTab.removeValue(forKey: "uninstall") }
+                else { appState.resultsByTab["uninstall"] = found.rows }
+                activity.recordScan(started: started)
+                await OperationLog.shared.record("Uninstall \(app.name): reviewed \(found.rows.count) items")
+                loading = false
+            }
+            return
         }
+        note = "Protected locations could not be verified: \(error). Reload protections before reviewing an app."
     }
     private func performUninstall() {
-        guard let plan, !appState.dryRunEnabled else { return }
-        removing = true
-        let paths = selectedPaths, running = runningIDs(), whitelist = appState.whitelist
-        Task {
-            let report = await uninstaller.execute(plan, selectedPaths: paths, whitelist: whitelist, runningBundleIDs: running)
-            activity.recordRemoval(report); note = report.summary
-            let moved = Set(report.outcomes.compactMap { result -> String? in
-                if case .trashed = result.result { return result.path }; return nil
-            })
-            let remaining = plan.rows.filter { !moved.contains($0.path) }
-            self.plan = UninstallPlan(app: plan.app, rows: remaining, identities: plan.identities, kept: plan.kept)
-            appState.resultsByTab["uninstall"] = remaining
-            selectedPaths.subtract(moved); removing = false
-            if moved.contains(plan.app.path) { apps.removeAll { $0.path == plan.app.path } }
+        guard let error = appState.refreshProtections() else {
+            guard let plan, !appState.dryRunEnabled else { return }
+            removing = true
+            let paths = selectedPaths, running = runningIDs(), whitelist = appState.whitelist
+            Task {
+                let report = await uninstaller.execute(plan, selectedPaths: paths, whitelist: whitelist, runningBundleIDs: running)
+                activity.recordRemoval(report); note = report.summary
+                let moved = Set(report.outcomes.compactMap { result -> String? in
+                    if case .trashed = result.result { return result.path }; return nil
+                })
+                let settled = appState.applyMoleRemoval(report, to: "uninstall")
+                let remaining = plan.rows.filter { !settled.contains($0.path) }
+                let kept = plan.kept + appState.advisories(for: "uninstall").filter { settled.contains($0.id) }
+                self.plan = UninstallPlan(app: plan.app, rows: remaining,
+                    identities: plan.identities.filter { !settled.contains($0.key) },
+                    bindings: plan.bindings.filter { !settled.contains($0.key) }, kept: kept)
+                selectedPaths.subtract(settled); removing = false
+                if moved.contains(plan.app.path) { apps.removeAll { $0.path == plan.app.path } }
+            }
+            return
         }
+        note = "Protected locations could not be verified: \(error). Nothing was moved to Trash."
     }
 }

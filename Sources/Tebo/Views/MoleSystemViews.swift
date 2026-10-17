@@ -106,6 +106,9 @@ struct MoleOptimizeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     MolePageHeading(title: "Optimize", detail: "Maintenance with a clear preview of every action", symbol: "slider.horizontal.3")
+                    if let error = appState.protectionError {
+                        protectionWarning(error)
+                    }
                     HStack {
                         Text("Preview protects every maintenance action.").font(.caption).foregroundStyle(.secondary)
                         Spacer()
@@ -162,9 +165,15 @@ struct MoleOptimizeView: View {
                 Spacer()
                 if !listing.isAvailable { TeboBadge(text: "Unavailable") }
                 else if task.needsAdmin { TeboBadge(text: "Admin", systemImage: "lock") }
-                else if protected { TeboBadge(text: "Protected", systemImage: "shield") }
+                else if protected || appState.protectionError != nil {
+                    TeboBadge(text: appState.protectionError == nil ? "Protected" : "Blocked", systemImage: "shield")
+                }
                 else {
                     Button(runningID == task.id ? "Running…" : appState.dryRunEnabled ? "Preview" : "Run") {
+                        if let error = appState.refreshProtections() {
+                            results[task.id] = "Protection settings could not be verified. Nothing changed. \(error)"
+                            return
+                        }
                         if appState.dryRunEnabled {
                             results[task.id] = "Preview only. Nothing changed.\n" + task.commandLines.joined(separator: "\n")
                             Task { await OperationLog.shared.record("Optimize \(task.id): preview only, no changes") }
@@ -182,9 +191,14 @@ struct MoleOptimizeView: View {
     }
     private func execute(_ task: OptimizeTask) {
         guard !appState.dryRunEnabled, !task.needsAdmin else { return }
+        guard appState.refreshProtections() == nil else {
+            results[task.id] = "Protection settings could not be verified. Nothing changed."
+            return
+        }
+        let whitelist = appState.whitelist
         runningID = task.id
         Task {
-            let result = await OptimizeRunner().run(task, preview: appState.dryRunEnabled, protectedPatterns: appState.whitelist)
+            let result = await OptimizeRunner().run(task, preview: appState.dryRunEnabled, protectedPatterns: whitelist)
             switch result {
             case .preview(let commands): results[task.id] = "Preview only. Nothing changed.\n" + commands.joined(separator: "\n")
             case .skippedProtected: results[task.id] = "Protected. Nothing changed."
@@ -196,6 +210,20 @@ struct MoleOptimizeView: View {
             }
             runningID = nil
         }
+    }
+
+    @ViewBuilder
+    private func protectionWarning(_ error: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.shield").foregroundStyle(TeboPalette.orange)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Protection settings could not be verified. Optimize actions are blocked.")
+                    .font(.callout.weight(.medium))
+                Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            Spacer()
+            Button("Reload protections") { appState.reloadProtections() }
+        }.teboCard()
     }
 }
 
@@ -213,6 +241,14 @@ private struct DatabaseOptimizationView: View {
             VStack(alignment: .leading, spacing: 18) {
                 Button("All maintenance", action: back).buttonStyle(.plain).font(.caption)
                 MolePageHeading(title: "Database Optimization", detail: "Compact free pages without removing records", symbol: "externaldrive.badge.checkmark")
+                if let error = appState.protectionError {
+                    HStack {
+                        Text("Protection settings could not be verified. Database actions are blocked. \(error)")
+                            .font(.caption).foregroundStyle(.orange).textSelection(.enabled)
+                        Spacer()
+                        Button("Reload protections") { appState.reloadProtections() }
+                    }.teboCard()
+                }
                 Text("Quit the owning app first. Tebo checks integrity and saves a private SQLite backup before optimizing.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Preview only", isOn: Binding(get: { appState.dryRunEnabled }, set: { appState.dryRunEnabled = $0 }))
@@ -229,7 +265,7 @@ private struct DatabaseOptimizationView: View {
                             Button(running == database.id ? "Working…" : appState.dryRunEnabled ? "Preview" : "Optimize") {
                                 if appState.dryRunEnabled { run(database) }
                                 else { selected = database; confirm = true }
-                            }.disabled(running != nil)
+                            }.disabled(running != nil || appState.protectionError != nil)
                         }
                         TeboPath(path: database.path)
                         if let result = results[database.id] { Text(result).font(.caption).textSelection(.enabled) }
@@ -237,15 +273,23 @@ private struct DatabaseOptimizationView: View {
                 }
             }.padding(24)
         }
-        .task { databases = await Task.detached(priority: .utility) { service.candidates() }.value }
+        .task {
+            guard appState.refreshProtections() == nil else { return }
+            databases = await Task.detached(priority: .utility) { service.candidates() }.value
+        }
         .confirmationDialog("Back up and optimize this database?", isPresented: $confirm, titleVisibility: .visible) {
             Button("Back up and optimize") { if let selected { run(selected) } }
             Button("Cancel", role: .cancel) {}
         } message: { Text("This compacts unused pages. It does not delete messages, history or mail records.") }
     }
     private func run(_ database: MaintenanceDatabase) {
+        guard appState.refreshProtections() == nil else {
+            results[database.id] = "Protection settings could not be verified. Nothing changed."
+            return
+        }
         running = database.id
-        let preview = appState.dryRunEnabled, whitelist = appState.whitelist
+        let preview = appState.dryRunEnabled
+        let whitelist = appState.whitelist
         let runningIDs = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
         Task {
             let result = await service.optimize(database, preview: preview, whitelist: whitelist, runningIDs: runningIDs)
@@ -267,17 +311,24 @@ private struct MaintenanceReviewView: View {
     @Environment(AppState.self) private var appState
     @State private var kept: [AdvisoryRow] = []
     var body: some View {
-        let whitelist = appState.whitelist
+        let cleanupRemovalValidator = CleanupRemovalValidator()
+        let subtitle = mode == .savedStates
+            ? "Saved application states older than 30 days may contain unsaved work."
+            : "Only malformed preference files are candidates; settings may be lost."
         VStack(alignment: .leading, spacing: 10) {
             Button("All maintenance", action: back).buttonStyle(.plain).font(.caption).padding(.horizontal, 16)
-            ScanTab(tabID: "maintenance-\(mode.id)", title: mode.rawValue, subtitle: mode.detail, icon: mode.symbol,
-                removalValidator: { path in
-                    let running = await MainActor.run { Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)) }
-                    return MaintenanceScanner().removalReason(path: path, mode: mode, whitelist: whitelist, runningIDs: running)
+            ScanTab(tabID: "maintenance-\(mode.id)", title: mode.rawValue, subtitle: subtitle, icon: mode.symbol,
+                recommendedExplanation: "All maintenance files need individual review. Saved state may contain unsaved work; malformed preferences may lose settings.",
+                moleRemovalValidator: { row, whitelist in
+                    await cleanupRemovalValidator.protectionReason(for: row, whitelist: whitelist)
                 },
                 runScan: {
-                    let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
-                    let report = await MaintenanceScanner().scan(mode, whitelist: appState.whitelist, runningIDs: running)
+                    guard appState.refreshProtections() == nil else {
+                        appState.setScanNote("Maintenance is blocked until protection settings are reloaded.", for: "maintenance-\(mode.id)")
+                        return []
+                    }
+                    let runningIDs = await MainActor.run { TargetScanner.liveProcessInventory()?.names }
+                    let report = await MaintenanceScanner().scan(mode, whitelist: appState.whitelist, runningIDs: runningIDs)
                     kept = report.kept
                     appState.setScanNote("\(report.rows.count) items ready for review. Every removal goes to Trash.", for: "maintenance-\(mode.id)")
                     return report.rows

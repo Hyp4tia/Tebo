@@ -68,7 +68,11 @@ struct OverviewView: View {
             ScanRing(isComplete: scanned).frame(width: 51, height: 51)
             VStack(alignment: .leading, spacing: 8) {
                 Text(scanned ? "Scan results" : "Ready to scan").font(.system(size: 14, weight: .medium))
-                Text(scanned ? "Found \(partial ? "≥ " : "")\(TeboBytes.text(bytes)) \(workspace == .files ? "in cleanup scans" : "in scanned categories")" : "Find a little more breathing room.")
+                Text(scanned
+                    ? workspace == .files
+                        ? "Logical size \(partial ? "≥ " : "")\(TeboBytes.text(bytes)) in File cleanup scan results"
+                        : "Found \(partial ? "≥ " : "")\(TeboBytes.text(bytes)) in scanned categories"
+                    : "Find a little more breathing room.")
                     .font(.system(size: 12)).foregroundStyle(TeboPalette.secondary).lineLimit(2)
             }
             Spacer(minLength: 8)
@@ -173,9 +177,11 @@ struct WorkspaceInspector: View {
             Text("Clean. Organize. Breathe.").font(.system(size: 14)).foregroundStyle(TeboPalette.secondary).padding(.top, 9)
             Rectangle().fill(TeboPalette.line).frame(height: 1).padding(.top, condensed ? 18 : compact ? 28 : 40)
                 .padding(.bottom, condensed ? 14 : 19)
-            metric("Space Freed", symbol: "bag", value: activity.trashedBytes == 0 ? "0 MB" : TeboBytes.text(activity.trashedBytes))
-                .help("Size moved to the Trash this session. Emptying the Trash is a separate Finder action.")
-            metric("Files Removed", symbol: "doc", value: "\(activity.trashedCount)")
+            metric("Moved to Trash", symbol: "bag",
+                   value: activity.trashedBytes == 0 ? "0 MB" : TeboBytes.text(activity.trashedBytes))
+                .help("Logical item size moved into the Trash this session, not measured free-space gain. Moving to Trash does not immediately free disk storage; emptying the Trash is a separate Finder action.")
+            metric("Items Moved", symbol: "doc", value: "\(activity.trashedCount)")
+                .help("Successful moves to Trash. Each directory counts as one item, not as each contained file.")
             metric("Scan Time", symbol: "clock", value: activity.durationText)
             Spacer(minLength: 8)
             FocusCard().frame(height: condensed ? 104 : compact ? 148 : 177)

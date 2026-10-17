@@ -19,7 +19,13 @@ final class AppState {
 
     /// User-protected path substrings, e.g. "~/Library/Caches/com.myapp".
     /// Loaded from ~/.config/tebo/whitelist on launch.
-    var whitelist: Set<String> = []
+    var whitelist: Set<String> = [] {
+        didSet {
+            if whitelist != oldValue { invalidateMolePreviews() }
+        }
+    }
+    private(set) var protectionError: String?
+    @ObservationIgnored private let whitelistURL: URL?
 
     /// Detected state of the bundled czkawka engine (presence + hash verification).
     var engine: EngineStatus = .missing
@@ -30,9 +36,36 @@ final class AppState {
     /// nil until probed. Full Disk Access is inferred by reading a protected path (PermissionProbe).
     var hasFullDiskAccess: Bool?
 
-    init() {
+    init(whitelistURL: URL? = nil) {
         // Tiny file read on launch — safe on the main thread.
-        self.whitelist = WhitelistStore.load()
+        self.whitelistURL = whitelistURL
+        let snapshot = WhitelistStore.snapshot(from: whitelistURL)
+        self.whitelist = snapshot.entries
+        self.protectionError = snapshot.error
+    }
+
+    @discardableResult
+    func refreshProtections() -> String? {
+        guard protectionError == nil else { return protectionError }
+        let snapshot = WhitelistStore.snapshot(from: whitelistURL)
+        whitelist = snapshot.entries
+        protectionError = snapshot.error
+        return protectionError
+    }
+
+    func reloadProtections() {
+        protectionError = nil
+        refreshProtections()
+    }
+
+    private func invalidateMolePreviews() {
+        for tab in Array(resultsByTab.keys) where Self.isMoleTab(tab) {
+            selectedIDs.subtract(results(for: tab).map(\.id))
+            resultsByTab.removeValue(forKey: tab)
+            advisoriesByTab.removeValue(forKey: tab)
+            scanNotesByTab[tab] = "Protection settings changed. Rescan before removing anything."
+        }
+        folderAnalysis = nil
     }
 
     /// Probe external tooling. Verifying the engine reads and hashes ~27 MB, so it stays off the
@@ -53,15 +86,24 @@ final class AppState {
     /// Add protection + persist. Ignores blank entries.
     func addWhitelist(_ entry: String) {
         let trimmed = entry.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        whitelist.insert(trimmed)
-        WhitelistStore.save(whitelist)
+        guard !trimmed.isEmpty, refreshProtections() == nil else { return }
+        persistProtections(whitelist.union([trimmed]))
     }
 
     /// Remove protection + persist.
     func removeWhitelist(_ entry: String) {
-        whitelist.remove(entry)
-        WhitelistStore.save(whitelist)
+        guard refreshProtections() == nil else { return }
+        persistProtections(whitelist.subtracting([entry]))
+    }
+
+    private func persistProtections(_ entries: Set<String>) {
+        if let error = WhitelistStore.save(entries, to: whitelistURL) {
+            // A failed save must not claim the user's new protection has taken effect.
+            protectionError = error
+            invalidateMolePreviews()
+            return
+        }
+        whitelist = entries
     }
 
     /// Last scan results per tab, keyed by tab id ("clean", "duplicates"...).
@@ -111,6 +153,27 @@ final class AppState {
     /// Results for one tab (empty array if never scanned).
     func results(for tab: String) -> [ScanResult] {
         resultsByTab[tab] ?? []
+    }
+
+    /// Settled Mole items require a fresh scan before they can be selected again.
+    @discardableResult
+    func applyMoleRemoval(_ report: DeleteReport, to tab: String) -> Set<String> {
+        let settled = Set(report.outcomes.map(\.path))
+        let rows = results(for: tab)
+        selectedIDs.subtract(rows.filter { settled.contains($0.path) }.map(\.id))
+        resultsByTab[tab] = rows.filter { !settled.contains($0.path) }
+        let kept = report.outcomes.compactMap { outcome -> AdvisoryRow? in
+            let detail: String
+            switch outcome.result {
+            case .trashed: return nil
+            case .skipped(let reason): detail = reason.displayText
+            case .failed(let message): detail = "Move failed: \(message). Item kept; rescan before retrying."
+            }
+            return AdvisoryRow(id: outcome.path, title: URL(fileURLWithPath: outcome.path).lastPathComponent,
+                               detail: detail, source: outcome.path, group: "Kept after removal review")
+        }
+        advisoriesByTab[tab, default: []].append(contentsOf: kept)
+        return settled
     }
 
     func results(forTabs tabs: [String]) -> [ScanResult] {
@@ -171,8 +234,16 @@ final class AppState {
     }
 
     /// Tick exactly the rows their own scanner marked as a safe default.
-    func selectRecommended(for tab: String) {
-        selectedIDs.formUnion(results(for: tab).filter(\.recommendedForSelection).map(\.id))
+    func selectRecommended(for tab: String, visibleIDs: Set<UUID>? = nil) {
+        // Selecting everything first must not leave manual-review items ticked in Mole tabs.
+        if Self.isMoleTab(tab) { selectedIDs.subtract(results(for: tab).map(\.id)) }
+        selectedIDs.formUnion(results(for: tab).filter {
+            $0.recommendedForSelection && (visibleIDs?.contains($0.id) ?? true)
+        }.map(\.id))
+    }
+
+    static func isMoleTab(_ tab: String) -> Bool {
+        ["clean", "purge", "installer", "analyze", "uninstall"].contains(tab) || tab.hasPrefix("maintenance-")
     }
 
     /// Tick a specific set of rows (per-group "select all", keep-one-per-group).

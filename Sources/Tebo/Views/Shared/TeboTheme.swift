@@ -134,6 +134,7 @@ final class WorkspaceActivity {
     var mediaSnapshotsByTab: [String: [UUID: MediaFileSnapshot]] = [:]
     var mediaReferenceGuardsByTab: [String: [UUID: [String: MediaFileSnapshot]]] = [:]
     var identitiesByTab: [String: [String: FileIdentity]] = [:]
+    var bindingsByTab: [String: [String: PathBinding]] = [:]
 
     var durationText: String {
         guard let scanDuration else { return "\u{2013}" }

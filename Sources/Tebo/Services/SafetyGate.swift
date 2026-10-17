@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 // MARK: - SafetyGate
@@ -31,13 +32,15 @@ public enum SafetyGate {
         case whitelisted = "user whitelisted"
         case criticalSystemPath = "critical system path"
         case appleSystemFragment = "Apple system data fragment"
+        case protectedUserData = "mandatory user-data protection"
+        case dataContainerRoot = "whole application data container"
     }
 
     // MARK: - Protected locations (never delete)
 
     /// Exact deny entries from Mole's `_mole_is_critical_deletion_path`:
     /// the path itself is refused, children are not.
-    private static let exactDenies: [String] = [
+    private static let exactDenies = Set([
         "/", "/bin", "/dev", "/sbin", "/usr", "/System",
         "/Library", "/Applications", "/Volumes", "/opt", "/opt/homebrew",
         "/Users", "/Users/Shared", "/Users/Guest",
@@ -51,7 +54,7 @@ public enum SafetyGate {
         // App extras (kept from the original SafetyGate):
         "/Library/Updates",           // Software Update staging — read-only
         "/macOS Install Data"         // Big Sur+ update staging
-    ]
+    ].map { $0.lowercased() })
 
     /// Subtree deny entries: the path AND everything below it is refused.
     /// Note: Mole only touches /Library via sudo. Tebo has no
@@ -71,7 +74,7 @@ public enum SafetyGate {
         "/Library/Updates/",
         "/private/var/db/powerlog/", // Active PowerLog DB — read-only (Mole rule)
         "/macOS Install Data/"
-    ]
+    ].map { $0.lowercased() }
 
     /// Carve-outs inside a denied subtree that Mole keeps deletable.
     /// Homebrew (Intel) lives in /usr/local, Apple Silicon in /opt/homebrew:
@@ -86,7 +89,7 @@ public enum SafetyGate {
     private static let blockedFragments: [String] = [
         "com.apple.",
         "Preferences/ByHost" // Machine-specific plists, too risky
-    ]
+    ].map { $0.lowercased() }
 
     // MARK: - Public API
 
@@ -98,6 +101,12 @@ public enum SafetyGate {
     ///     so `~/Library/Caches/x` protects as users expect.
     public static func isAllowed(path: String, whitelist: Set<String>) -> Bool {
         rejectionReason(path: path, whitelist: whitelist) == nil
+    }
+
+    /// Protected ancestors may be inspected for eligible leaves, never removed themselves.
+    public static func isAllowedToTraverse(path: String, whitelist: Set<String>) -> Bool {
+        let reason = rejectionReason(path: path, whitelist: whitelist, includeProtectedAncestors: false)
+        return reason == nil || reason == .dataContainerRoot
     }
 
     /// Filters a batch, keeping only safe items. Fast O(n) pass.
@@ -112,7 +121,7 @@ public enum SafetyGate {
 
     /// Typed string-level rejection, or nil when the path passes. Ordered
     /// like Mole's validate_path_for_deletion: structure first, then policy.
-    static func rejectionReason(path: String, whitelist: Set<String>) -> RejectionReason? {
+    static func rejectionReason(path: String, whitelist: Set<String>, includeProtectedAncestors: Bool = true) -> RejectionReason? {
         // 1. Empty or root? Never.
         guard !path.isEmpty else { return .emptyPath }
 
@@ -131,28 +140,76 @@ public enum SafetyGate {
         }
 
         // 5. User whitelist (substring match; ~ expanded; blanks ignored).
+        let foldedPath = normalized(path).lowercased()
         for entry in whitelist where !entry.isEmpty {
-            if path.contains(entry) { return .whitelisted }
-            if entry.hasPrefix("~"),
-               path.contains((entry as NSString).expandingTildeInPath) { return .whitelisted }
             let expanded = (entry as NSString).expandingTildeInPath
-            if expanded.hasPrefix("/"), normalized(expanded).hasPrefix(normalized(path) + "/") {
+            let foldedEntry = (expanded.hasPrefix("/") ? normalized(expanded) : expanded).lowercased()
+            if foldedPath.contains(entry.lowercased()) || foldedPath.contains(foldedEntry) { return .whitelisted }
+            if includeProtectedAncestors, expanded.hasPrefix("/"), normalized(expanded).lowercased().hasPrefix(foldedPath + "/") {
                 return .whitelisted // Removing a parent would also remove this protected child.
             }
         }
 
         // 6. Critical system paths, matched on the normalized literal so
         //    "//" and "/./" cosmetics cannot slip past the list.
-        if isCriticalSystemPath(normalized(path)) { return .criticalSystemPath }
+        if isCriticalSystemPath(normalized(path)) {
+            let parts = foldedPath.split(separator: "/")
+            let collection = parts.dropFirst(2).joined(separator: "/")
+            let inspectable = parts.count > 2 && parts[0] == "users" && parts[1] != "guest"
+                && ["library/containers", "library/group containers", "library/caches", "library/logs"].contains(collection)
+            // Collection roots authorize discovery only, never removal of protected descendants.
+            if includeProtectedAncestors || !inspectable { return .criticalSystemPath }
+        }
 
         // 7. Apple-owned fragments.
         if containsAppleSystemFragment(path) { return .appleSystemFragment }
 
+        if containsMandatoryProtectedData(path, includeAncestors: includeProtectedAncestors) { return .protectedUserData }
+        if isWholeDataContainer(path) { return .dataContainerRoot }
+
         return nil
+    }
+
+    // These are always applied, independently of the editable convenience exclusions.
+    // Adapted from Mole base.sh SAFETY_WHITELIST_PATTERNS, with stricter local backup/model guards:
+    // https://github.com/tw93/Mole/blob/0d92da5c855af23310cc1d19a6fb5a713c0bc2c8/lib/core/base.sh#L188-L212
+    private static let mandatoryTrees: [[String]] = [
+        "Library/Caches/CloudKit*", "Library/Caches/pypoetry/virtualenvs*",
+        "Library/Caches/org.R-project.R/R/renv", ".cache/pypoetry/virtualenvs*",
+        "Library/Application Support/MobileSync", "Library/Mobile Documents",
+        "Library/CloudStorage", "Library/Logs/tebo", ".ollama/models"
+    ].map { $0.lowercased().split(separator: "/").map(String.init) }
+
+    static func containsMandatoryProtectedData(_ path: String, includeAncestors: Bool = true) -> Bool {
+        let parts = normalized(path).lowercased().split(separator: "/").map(String.init)
+        if parts.contains(where: { $0.hasSuffix(".photoslibrary") || $0.hasSuffix(".photolibrary")
+            || $0.hasSuffix(".mlmodelc") }) { return true }
+        for pattern in mandatoryTrees {
+            for index in parts.indices where parts[index] == pattern[0] {
+                let remaining = parts[index...]
+                if !includeAncestors, remaining.count < pattern.count { continue }
+                let overlap = min(remaining.count, pattern.count)
+                // A parent removal would also remove the protected descendant, even if it was
+                // not present at scan time. Siblings outside this prefix remain eligible.
+                if zip(remaining.prefix(overlap), pattern.prefix(overlap)).allSatisfy({
+                    fnmatch($0.1, $0.0, FNM_PATHNAME) == 0
+                }) { return true }
+            }
+        }
+        return false
+    }
+
+    private static func isWholeDataContainer(_ path: String) -> Bool {
+        let parts = normalized(path).lowercased().split(separator: "/")
+        guard parts.count >= 3 else { return false }
+        let tail = Array(parts.suffix(3))
+        return tail[0] == "library" && ["containers", "group containers"].contains(tail[1])
     }
 
     /// Deny list against an already-normalized, absolute path.
     static func isCriticalSystemPath(_ path: String) -> Bool {
+        // Deny-only case folding closes aliases on case-insensitive APFS without rewriting input.
+        let path = path.lowercased()
         if exactDenies.contains(path) { return true }
 
         for root in subtreeDenies where path.hasPrefix(root) {
@@ -166,8 +223,8 @@ public enum SafetyGate {
         // under /Users. Bash cannot express this in one glob; it matches one
         // level. Catches the empty-variable collapse "$user/$leaf" ->
         // "/Users/<name>" that would hand rm an entire home directory.
-        if path.hasPrefix("/Users/") {
-            let rest = String(path.dropFirst("/Users/".count))
+        if path.hasPrefix("/users/") {
+            let rest = String(path.dropFirst("/users/".count))
             if !rest.isEmpty, !rest.contains("/") { return true }
             let components = rest.split(separator: "/")
             let relative = components.dropFirst().joined(separator: "/").lowercased()
@@ -190,7 +247,8 @@ public enum SafetyGate {
     /// Apple-system fragments. Separate from the deny list so PathValidator
     /// can re-run them on symlink-resolved paths too.
     static func containsAppleSystemFragment(_ path: String) -> Bool {
-        blockedFragments.contains(where: { path.contains($0) })
+        let folded = normalized(path).lowercased()
+        return blockedFragments.contains(where: { folded.contains($0) })
     }
 
     /// Collapse "//" and "/./" like Mole's _mole_normalize_deletion_policy_path.

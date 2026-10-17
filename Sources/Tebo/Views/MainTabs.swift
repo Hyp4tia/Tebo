@@ -10,28 +10,34 @@ struct CleanView: View {
 
     var body: some View {
         // Snapshot what the scan needs so the closure captures values, not view state.
-        let whitelist = appState.whitelist
         let installerScan = installerConfiguration
+        let orphanConfiguration = OrphanScanConfiguration.defaults()
+        let cleanupRemovalValidator = CleanupRemovalValidator(
+            orphanConfiguration: orphanConfiguration,
+            installerConfiguration: installerScan
+        )
 
         ScanTab(
             tabID: "clean",
             title: "Clean",
-            subtitle: "Caches, app leftovers and downloaded installers",
+            subtitle: "Mole cleanup rules, orphan caches and downloaded installers",
             icon: "sparkles",
             scanScope: installerScan.searchRoots,
-            recommendedExplanation: "Known-safe cleanup items and installers older than 30 days. Recent downloads stay unticked.",
-            removalValidator: { path in
-                await MainActor.run {
-                    TargetScanner(runningProcessNames: TargetScanner.liveRunningProcessNames())
-                        .runningProtectionReason(for: path)
-                }
+            recommendedExplanation: "Select recommended chooses supported rebuildable caches only. Other entries need individual review or remain read-only.",
+            moleRemovalValidator: { row, currentWhitelist in
+                await cleanupRemovalValidator.protectionReason(for: row, whitelist: currentWhitelist)
             },
             runScan: {
-                let running = TargetScanner.liveRunningProcessNames()
-                let outcome = await TargetScanner(runningProcessNames: running)
-                    .scan(whitelist: whitelist)
+                guard appState.refreshProtections() == nil else {
+                    appState.setScanNote("Cleanup is blocked until protection settings are reloaded.", for: "clean")
+                    return []
+                }
+                let currentWhitelist = appState.whitelist
+                let running = TargetScanner.liveProcessInventory()
+                let outcome = await TargetScanner(processInventory: running)
+                    .scan(whitelist: currentWhitelist)
                 guard !Task.isCancelled else { return [] }
-                let orphans = await OrphanScanner(configuration: .defaults()).scan()
+                let orphans = await OrphanScanner(configuration: orphanConfiguration).scan(whitelist: currentWhitelist)
                 guard !Task.isCancelled else { return [] }
                 let installers = await InstallerFinder(configuration: installerScan).findInstallers()
                 guard !Task.isCancelled else { return [] }
@@ -40,12 +46,12 @@ struct CleanView: View {
                     AdvisoryRow(id: $0.path, title: $0.name, detail: $0.reason, source: $0.path)
                 }
                 appState.advisoriesByTab["clean", default: []] += installers.filter {
-                    !SafetyGate.isAllowed(path: $0.path, whitelist: whitelist)
+                    !SafetyGate.isAllowed(path: $0.path, whitelist: currentWhitelist)
                 }.map {
                     AdvisoryRow(id: $0.path, title: $0.name, detail: "Protected installer: kept", source: $0.path)
                 }
                 let merged = CleanResultCombiner.merge(tableRows: outcome.deletable, orphans: orphans.orphans, installers: installers)
-                let currentGuard = TargetScanner(runningProcessNames: TargetScanner.liveRunningProcessNames())
+                let currentGuard = TargetScanner(processInventory: TargetScanner.liveProcessInventory())
                 let runningReasons = currentGuard.runningProtectionReasons(for: merged.map(\.path))
                 return merged.filter { row in
                     guard let reason = runningReasons[row.path] else { return true }

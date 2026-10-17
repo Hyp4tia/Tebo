@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 enum MeasurementStatus: String, Sendable, Codable { case complete, partial, unavailable }
@@ -9,17 +10,34 @@ struct FileTreeMeasurement: Sendable {
     var newestModification: Date?
     var containsRepository = false
     var containsCredentials = false
+    var protectedPath: String?
+    var containsSymbolicLinks = false
+    var containsCloudPlaceholders = false
+
+    static func isDataless(flags: UInt32) -> Bool { flags & UInt32(SF_DATALESS) != 0 }
 
     static func read(_ url: URL, entryLimit: Int = 50_000, timeout: TimeInterval = 4,
-                     stopAtSafetyEvidence: Bool = false) -> Self {
+                     stopAtSafetyEvidence: Bool = false, whitelist: Set<String> = []) -> Self {
         var result = Self()
         let fm = FileManager.default
+        var rootInfo = stat()
+        guard lstat(url.path, &rootInfo) == 0 else { result.status = .unavailable; return result }
+        // Inspect flags before asking providers for descendant metadata, which can hydrate data.
+        if isDataless(flags: rootInfo.st_flags) {
+            result.containsCloudPlaceholders = true; result.status = .unavailable; return result
+        }
         let keys: Set<URLResourceKey> = [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey,
-                                       .fileSizeKey, .contentModificationDateKey]
-        guard let initial = try? url.resourceValues(forKeys: keys), initial.isSymbolicLink != true else {
+                                       .fileSizeKey, .contentModificationDateKey, .volumeIsLocalKey]
+        guard let initial = try? url.resourceValues(forKeys: keys), initial.isSymbolicLink != true,
+              initial.volumeIsLocal == true else {
             result.status = .unavailable; return result
         }
         result.newestModification = initial.contentModificationDate
+        if initial.contentModificationDate == nil { result.status = .partial }
+        if !SafetyGate.isAllowed(path: url.path, whitelist: whitelist) {
+            result.protectedPath = url.path
+            if stopAtSafetyEvidence { result.status = .partial; return result }
+        }
         if initial.isDirectory != true {
             guard initial.isRegularFile == true, let size = initial.fileSize else {
                 result.status = .unavailable; return result
@@ -37,7 +55,7 @@ struct FileTreeMeasurement: Sendable {
                 result.status = .partial; break
             }
             guard let children = try? fm.contentsOfDirectory(at: directory,
-                includingPropertiesForKeys: Array(keys)) else {
+                includingPropertiesForKeys: nil) else {
                 result.status = directory == url ? .unavailable : .partial
                 continue
             }
@@ -47,23 +65,41 @@ struct FileTreeMeasurement: Sendable {
                     result.status = .partial; return result
                 }
                 let name = child.lastPathComponent
+                // Cache parents must not hide protected data added after the preview.
+                if !SafetyGate.isAllowed(path: child.path, whitelist: whitelist) {
+                    result.protectedPath = child.path
+                    if stopAtSafetyEvidence { result.status = .partial; return result }
+                }
                 if [".git", ".hg", ".svn"].contains(name) {
                     result.containsRepository = true
                     if stopAtSafetyEvidence { result.status = .partial; return result }
                 }
                 result.containsCredentials = result.containsCredentials || credentialName(name)
                 if stopAtSafetyEvidence && result.containsCredentials { result.status = .partial; return result }
+                var info = stat()
+                guard lstat(child.path, &info) == 0 else { result.status = .partial; continue }
+                if isDataless(flags: info.st_flags) {
+                    result.containsCloudPlaceholders = true; result.status = .partial; continue
+                }
                 guard let values = try? child.resourceValues(forKeys: keys) else {
                     result.status = .partial; continue
                 }
-                guard values.isSymbolicLink != true else { continue }
+                if values.isSymbolicLink == true {
+                    result.containsSymbolicLinks = true
+                    if stopAtSafetyEvidence { result.status = .partial; return result }
+                    continue
+                }
+                guard values.volumeIsLocal == true, info.st_dev == rootInfo.st_dev else {
+                    result.status = .partial; continue
+                }
                 if let modified = values.contentModificationDate {
                     result.newestModification = max(result.newestModification ?? modified, modified)
-                }
+                } else { result.status = .partial }
                 if values.isDirectory == true { pending.append(child) }
                 else if values.isRegularFile == true {
                     guard let size = values.fileSize else { result.status = .partial; continue }
-                    if let identity = FileIdentity.read(path: child.path), !seen.insert(identity).inserted { continue }
+                    guard let identity = FileIdentity.read(path: child.path) else { result.status = .partial; continue }
+                    if !seen.insert(identity).inserted { continue }
                     result.bytes += Int64(size); result.fileCount += 1
                 }
             }

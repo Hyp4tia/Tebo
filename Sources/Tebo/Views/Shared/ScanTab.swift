@@ -18,6 +18,7 @@ struct ScanTab<ExtraInfo: View>: View {
     /// Runs the tab's own scan and returns the rows it found.
     let runScan: () async -> [ScanResult]
     let removalValidator: (@Sendable (String) async -> String?)?
+    let moleRemovalValidator: (@Sendable (ScanResult, Set<String>) async -> String?)?
     let rendersEmptyRowsOverride: Bool
 
     /// What "Select recommended" means in this tab, shown beside the button. nil when the tool has
@@ -42,6 +43,11 @@ struct ScanTab<ExtraInfo: View>: View {
     @State private var showConfirm = false
     @State private var scanTask: Task<Void, Never>?
     @State private var scanRequestID = UUID()
+    @State private var removalTask: Task<Void, Never>?
+    @State private var removalRequestID = UUID()
+    @State private var isRemoving = false
+    @State private var isCancellingRemoval = false
+    @State private var pendingMoleReview: MoleRemovalReview?
     /// Bumped after each scan so row previews are re-read from disk.
     @State private var refreshToken = 0
 
@@ -59,6 +65,7 @@ struct ScanTab<ExtraInfo: View>: View {
         rescanRequested: Binding<Bool>? = nil,
         rendersEmptyRowsOverride: Bool = false,
         removalValidator: (@Sendable (String) async -> String?)? = nil,
+        moleRemovalValidator: (@Sendable (ScanResult, Set<String>) async -> String?)? = nil,
         runScan: @escaping () async -> [ScanResult],
         @ViewBuilder extraInfo: @escaping () -> ExtraInfo = { EmptyView() }
     ) {
@@ -75,6 +82,7 @@ struct ScanTab<ExtraInfo: View>: View {
         self.rescanRequested = rescanRequested
         self.runScan = runScan
         self.removalValidator = removalValidator
+        self.moleRemovalValidator = moleRemovalValidator
         self.rendersEmptyRowsOverride = rendersEmptyRowsOverride
         self.extraInfo = extraInfo
     }
@@ -139,8 +147,21 @@ struct ScanTab<ExtraInfo: View>: View {
             actionBar(selectedCount: selectedCount, selectedBytes: selectedBytes, hasRows: !items.isEmpty)
         }
         .background(TeboPalette.canvas)
-        .onDisappear { cancelScan() }
+        .onDisappear {
+            cancelScan()
+            cancelRemoval(showNote: false)
+        }
         .onChange(of: scanScope, initial: true) { _, _ in synchronizeScope() }
+        .onChange(of: appState.whitelist) { oldValue, newValue in
+            guard AppState.isMoleTab(tabID), oldValue != newValue else { return }
+            cancelRemoval(showNote: false)
+            activity.identitiesByTab.removeValue(forKey: tabID)
+            activity.bindingsByTab.removeValue(forKey: tabID)
+        }
+        .onChange(of: appState.protectionError) { _, error in
+            guard AppState.isMoleTab(tabID), error != nil else { return }
+            cancelRemoval(showNote: false)
+        }
         .onChange(of: rescanRequested?.wrappedValue) { _, requested in
             guard requested == true else { return }
             rescanRequested?.wrappedValue = false
@@ -149,18 +170,25 @@ struct ScanTab<ExtraInfo: View>: View {
         .confirmationDialog(
             appState.dryRunEnabled
                 ? "Preview only"
-                : "Move \(selectedCount) items to the Trash?",
+                : "Move \(AppState.isMoleTab(tabID) ? (pendingMoleReview?.selectedIDs.count ?? 0) : selectedCount) items to the Trash?",
             isPresented: $showConfirm,
             titleVisibility: .visible
         ) {
             if !appState.dryRunEnabled {
-                Button("Move to Trash", role: .destructive) { trashSelected() }
+                Button("Move to Trash", role: .destructive) {
+                    if AppState.isMoleTab(tabID) { confirmMoleRemoval() }
+                    else { trashSelected() }
+                }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {
+                if AppState.isMoleTab(tabID) { cancelRemoval(showNote: false) }
+            }
         } message: {
             Text(appState.dryRunEnabled
                  ? "Preview is on, so nothing was moved. Turn Preview off in Settings to delete."
-                 : "Moves the reviewed items to Trash. Reversible from the Trash.")
+                 : AppState.isMoleTab(tabID)
+                    ? "Moves exactly the reviewed selection to the Trash. The displayed size is logical item size, not measured free-space gain. Moving to Trash does not immediately free disk storage; you can recover items from the Trash."
+                    : "Moves the reviewed items to Trash. Reversible from the Trash.")
         }
     }
 
@@ -178,6 +206,7 @@ struct ScanTab<ExtraInfo: View>: View {
                     .buttonStyle(TeboButtonStyle())
             }
             ScanButton(title: "Scan", isScanning: isScanning) { startScan() }
+                .disabled(AppState.isMoleTab(tabID) && isRemoving)
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)
@@ -187,7 +216,9 @@ struct ScanTab<ExtraInfo: View>: View {
     // MARK: Totals
 
     private func totals(items: [ScanResult], totalBytes: Int64, selectedBytes: Int64) -> some View {
-        HStack(spacing: 12) {
+        let isMole = AppState.isMoleTab(tabID)
+        let usesDefaultMoleSizeLabel = isMole && sizeLabel == "Reclaimable"
+        return HStack(spacing: 12) {
             StatTile(
                 label: foundLabel,
                 value: "\(items.count)",
@@ -195,17 +226,18 @@ struct ScanTab<ExtraInfo: View>: View {
                 systemImage: icon
             )
             StatTile(
-                label: sizeLabel,
+                label: usesDefaultMoleSizeLabel ? "Logical size" : sizeLabel,
                 value: (items.contains { !$0.isSizeComplete } ? "≥ " : "") + TeboBytes.text(totalBytes),
                 systemImage: "externaldrive.badge.minus",
                 tint: .accentColor,
-                detail: "if everything listed goes"
+                detail: isMole ? "Estimated item size" : "if everything listed goes"
             )
             StatTile(
                 label: "Selected",
                 value: (appState.selectedResults(for: tabID).contains { !$0.isSizeComplete } ? "≥ " : "") + TeboBytes.text(selectedBytes),
                 systemImage: "checkmark.circle",
-                detail: appState.selectedResults(for: tabID).isEmpty ? "nothing ticked yet" : "ready to move"
+                detail: appState.selectedResults(for: tabID).isEmpty ? "nothing ticked yet"
+                    : AppState.isMoleTab(tabID) ? "logical size ready to move" : "ready to move"
             )
         }
     }
@@ -218,12 +250,24 @@ struct ScanTab<ExtraInfo: View>: View {
             Button("Select all") { appState.select(items.map(\.id)) }
                 .disabled(items.isEmpty)
 
-            Button("Select recommended (\(recommendedCount))") { appState.select(items.filter(\.recommendedForSelection).map(\.id)) }
-                .disabled(recommendedCount == 0)
+            Button("Select recommended (\(recommendedCount))") {
+                if AppState.isMoleTab(tabID) {
+                    appState.selectRecommended(for: tabID, visibleIDs: Set(items.map(\.id)))
+                } else {
+                    appState.select(items.filter(\.recommendedForSelection).map(\.id))
+                }
+            }
+                .disabled(recommendedCount == 0 && (!AppState.isMoleTab(tabID) || appState.selectedResults(for: tabID).isEmpty))
                 .help(recommendedExplanation
                       ?? "This tool has no safe default: every row here needs a look before it goes.")
 
-            Button("Clear") { appState.clearSelection() }
+            Button("Clear") {
+                if AppState.isMoleTab(tabID) {
+                    appState.deselect(appState.results(for: tabID).map(\.id))
+                } else {
+                    appState.clearSelection()
+                }
+            }
                 .disabled(appState.selectedResults(for: tabID).isEmpty)
 
             Spacer()
@@ -263,19 +307,29 @@ struct ScanTab<ExtraInfo: View>: View {
             Spacer()
 
             if selectedCount > 0 {
-                Text("\(selectedCount) selected · \(TeboBytes.text(selectedBytes))")
+                Text("\(selectedCount) selected · \(TeboBytes.text(selectedBytes))\(AppState.isMoleTab(tabID) ? " logical size" : "")")
                     .font(.callout)
                     .monospacedDigit()
             }
 
-            Button(selectedCount > 0 ? "Move \(selectedCount) to Trash" : "Move to Trash") {
-                showConfirm = true
+            if AppState.isMoleTab(tabID), isRemoving {
+                Button(isCancellingRemoval ? "Cancelling…" : "Cancel move") { cancelRemoval(showNote: true) }
+                    .buttonStyle(TeboButtonStyle())
+                    .disabled(isCancellingRemoval)
+            } else {
+                Button(selectedCount > 0 ? "Move \(selectedCount) to Trash" : "Move to Trash") {
+                    if AppState.isMoleTab(tabID) { beginMoleConfirmation() }
+                    else { showConfirm = true }
+                }
+                .buttonStyle(TeboPrimaryButtonStyle())
+                .disabled(selectedCount == 0 || appState.dryRunEnabled
+                          || (AppState.isMoleTab(tabID) && appState.protectionError != nil))
+                .help(appState.dryRunEnabled
+                      ? "Preview is on: turn it off in Settings to move files to the Trash."
+                      : AppState.isMoleTab(tabID)
+                        ? "Confirms the exact reviewed selection. Items move to the Trash, and the size is not measured free-space gain."
+                        : "Moves the ticked rows to the Trash. Reversible from the Trash.")
             }
-            .buttonStyle(TeboPrimaryButtonStyle())
-            .disabled(selectedCount == 0 || appState.dryRunEnabled)
-            .help(appState.dryRunEnabled
-                  ? "Preview is on: turn it off in Settings to move files to the Trash."
-                  : "Moves the ticked rows to the Trash. Reversible from the Trash.")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -316,20 +370,41 @@ struct ScanTab<ExtraInfo: View>: View {
     }
 
     private func synchronizeScope() {
-        guard let scanScope, appState.updateScanScope(scanScope, for: tabID) else { return }
+        let changed: Bool
+        if AppState.isMoleTab(tabID) {
+            changed = appState.updateScanScope(scanScope ?? [], for: tabID)
+        } else if let scanScope {
+            changed = appState.updateScanScope(scanScope, for: tabID)
+        } else {
+            changed = false
+        }
+        guard changed else { return }
         cancelScan()
+        if AppState.isMoleTab(tabID) { cancelRemoval(showNote: false) }
         activity.identitiesByTab.removeValue(forKey: tabID)
+        if AppState.isMoleTab(tabID) { activity.bindingsByTab.removeValue(forKey: tabID) }
     }
 
     private func startScan() {
+        let isMole = AppState.isMoleTab(tabID)
+        guard !isMole || !isRemoving else { return }
+        if isMole { cancelRemoval(showNote: false) }
         synchronizeScope()
+        if isMole, let error = appState.refreshProtections() {
+            clearMolePreview(note: "Cleanup is blocked because protection settings could not be verified: \(error)")
+            isScanning = false
+            activity.isScanning = false
+            return
+        }
+        let protectionsAtStart = isMole ? appState.whitelist : nil
         scanTask?.cancel()
         let requestID = UUID()
         scanRequestID = requestID
         isScanning = true
         activity.isScanning = true
         let started = Date.now
-        appState.clearSelection()
+        if isMole { appState.deselect(appState.results(for: tabID).map(\.id)) }
+        else { appState.clearSelection() }
         scanTask = Task {
             let found = await runScan()
             guard requestID == scanRequestID else { return }
@@ -338,13 +413,38 @@ struct ScanTab<ExtraInfo: View>: View {
                 activity.isScanning = false
                 return
             }
+
+            if isMole {
+                if let error = appState.refreshProtections() {
+                    clearMolePreview(note: "Cleanup is blocked because protection settings could not be verified: \(error)")
+                    isScanning = false
+                    activity.isScanning = false
+                    return
+                }
+                guard appState.whitelist == protectionsAtStart else {
+                    clearMolePreview(note: "Protection settings changed during the scan. Rescan before reviewing or removing items.")
+                    isScanning = false
+                    activity.isScanning = false
+                    return
+                }
+            }
+
+            let activeWhitelist = protectionsAtStart ?? appState.whitelist
             // Filter through SafetyGate BEFORE showing (fail closed).
-            let safe = SafetyGate.filterAllowed(found, whitelist: appState.whitelist)
+            let safe = SafetyGate.filterAllowed(found, whitelist: activeWhitelist)
             appState.resultsByTab[tabID] = safe
-            activity.identitiesByTab[tabID] = Dictionary(safe.compactMap {
-                guard let identity = FileIdentity.read(path: $0.path) else { return nil }
-                return ($0.path, identity)
-            }, uniquingKeysWith: { first, _ in first })
+            var identities: [String: FileIdentity] = [:]
+            var bindings: [String: PathBinding] = [:]
+            for row in safe {
+                if identities[row.path] == nil, let identity = FileIdentity.read(path: row.path) {
+                    identities[row.path] = identity
+                }
+                if isMole, bindings[row.path] == nil, let binding = PathBinding.read(path: row.path) {
+                    bindings[row.path] = binding
+                }
+            }
+            activity.identitiesByTab[tabID] = identities
+            if isMole { activity.bindingsByTab[tabID] = bindings }
             await OperationLog.shared.record("[\(tabID)] Previewed \(safe.count) items")
             guard !Task.isCancelled, requestID == scanRequestID else { return }
             refreshToken += 1
@@ -353,8 +453,145 @@ struct ScanTab<ExtraInfo: View>: View {
         }
     }
 
+    private func clearMolePreview(note: String) {
+        appState.deselect(appState.results(for: tabID).map(\.id))
+        appState.resultsByTab.removeValue(forKey: tabID)
+        appState.advisoriesByTab.removeValue(forKey: tabID)
+        appState.setScanNote(note, for: tabID)
+        activity.identitiesByTab.removeValue(forKey: tabID)
+        activity.bindingsByTab.removeValue(forKey: tabID)
+    }
+
     private func toggle(_ item: ScanResult) {
         appState.toggleSelection(item.id)
+    }
+
+    private func beginMoleConfirmation() {
+        guard AppState.isMoleTab(tabID), !isRemoving, !appState.dryRunEnabled else { return }
+        if let error = appState.refreshProtections() {
+            appState.setScanNote("Cleanup is blocked because protection settings could not be verified: \(error)", for: tabID)
+            return
+        }
+        let rows = appState.results(for: tabID)
+        let selectedIDs = Set(appState.selectedResults(for: tabID).map(\.id))
+        let review = MoleRemovalReview(
+            rows: rows,
+            selectedIDs: selectedIDs,
+            scanScope: appState.scanScopesByTab[tabID],
+            whitelist: appState.whitelist,
+            identitiesByPath: activity.identitiesByTab[tabID] ?? [:],
+            bindingsByPath: activity.bindingsByTab[tabID] ?? [:]
+        )
+        if let reason = review.refusalReason(
+            currentRows: rows,
+            currentSelectedIDs: selectedIDs,
+            currentScope: appState.scanScopesByTab[tabID],
+            currentWhitelist: appState.whitelist,
+            currentIdentitiesByPath: activity.identitiesByTab[tabID] ?? [:],
+            currentBindingsByPath: activity.bindingsByTab[tabID] ?? [:],
+            previewEnabled: appState.dryRunEnabled
+        ) {
+            appState.setScanNote(reason, for: tabID)
+            return
+        }
+        pendingMoleReview = review
+        showConfirm = true
+    }
+
+    private func confirmMoleRemoval() {
+        guard AppState.isMoleTab(tabID), !isRemoving, let review = pendingMoleReview else { return }
+        guard !appState.dryRunEnabled else {
+            cancelRemoval(showNote: false)
+            appState.setScanNote("Preview is on; nothing was moved.", for: tabID)
+            return
+        }
+        if let error = appState.refreshProtections() {
+            cancelRemoval(showNote: false)
+            appState.setScanNote("Cleanup is blocked because protection settings could not be verified: \(error)", for: tabID)
+            return
+        }
+        if let reason = review.refusalReason(
+            currentRows: appState.results(for: tabID),
+            currentSelectedIDs: Set(appState.selectedResults(for: tabID).map(\.id)),
+            currentScope: appState.scanScopesByTab[tabID],
+            currentWhitelist: appState.whitelist,
+            currentIdentitiesByPath: activity.identitiesByTab[tabID] ?? [:],
+            currentBindingsByPath: activity.bindingsByTab[tabID] ?? [:],
+            previewEnabled: appState.dryRunEnabled
+        ) {
+            cancelRemoval(showNote: false)
+            appState.setScanNote(reason, for: tabID)
+            return
+        }
+        guard tabID == "analyze" || moleRemovalValidator != nil else {
+            cancelRemoval(showNote: false)
+            appState.setScanNote("The producing cleanup rule cannot be rechecked; nothing was moved.", for: tabID)
+            return
+        }
+
+        let selectedRows = review.rows.filter { review.selectedIDs.contains($0.id) }
+        let reviewedByPath = Dictionary(uniqueKeysWithValues: selectedRows.map { ($0.path, $0) })
+        let validator = moleRemovalValidator
+        let manualAnalyze = tabID == "analyze"
+        let operationID = UUID()
+        removalRequestID = operationID
+        isRemoving = true
+        isCancellingRemoval = false
+        showConfirm = false
+        removalTask = Task {
+            let report = await DeletePipeline().trash(
+                paths: selectedRows.map(\.path),
+                whitelist: review.whitelist,
+                expectedIdentities: review.identitiesByPath,
+                expectedBindings: review.bindingsByPath,
+                requirePreviewIdentity: true,
+                enforceCleanupSafety: true,
+                additionalValidation: { path in
+                    guard !Task.isCancelled else { return "Removal cancelled before validation." }
+                    if manualAnalyze {
+                        return await CleanupRemovalValidator.manualAnalyzeProtectionReason(
+                            for: path, whitelist: review.whitelist
+                        )
+                    }
+                    guard let row = reviewedByPath[path], let validator else {
+                        return "The reviewed cleanup source is missing; item kept."
+                    }
+                    return await validator(row, review.whitelist)
+                }
+            )
+            activity.recordRemoval(report)
+            let settled = appState.applyMoleRemoval(report, to: tabID)
+            activity.identitiesByTab[tabID] = (activity.identitiesByTab[tabID] ?? [:])
+                .filter { !settled.contains($0.key) }
+            activity.bindingsByTab[tabID] = (activity.bindingsByTab[tabID] ?? [:])
+                .filter { !settled.contains($0.key) }
+            let size = TeboBytes.text(report.freedBytes)
+            let summary = "Moved \(report.trashedCount) items to Trash (logical size \(size)); skipped \(report.skippedCount), failed \(report.failedCount)."
+            appState.setScanNote(Task.isCancelled ? "Removal cancelled. \(summary)" : summary, for: tabID)
+            if removalRequestID == operationID {
+                removalTask = nil
+                pendingMoleReview = nil
+                isRemoving = false
+                isCancellingRemoval = false
+            }
+        }
+    }
+
+    private func cancelRemoval(showNote: Bool) {
+        showConfirm = false
+        pendingMoleReview = nil
+        guard let task = removalTask else {
+            removalRequestID = UUID()
+            isRemoving = false
+            isCancellingRemoval = false
+            return
+        }
+        guard !isCancellingRemoval else { return }
+        isCancellingRemoval = true
+        task.cancel()
+        if showNote {
+            appState.setScanNote("Cancellation requested. Any items already moved remain recoverable from the Trash.", for: tabID)
+        }
     }
 
     private func trashSelected() {

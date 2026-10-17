@@ -146,3 +146,21 @@ release source to `main`. Version 1.2 is the latest stable GitHub release, and
 verification and staging app bundles were moved to recoverable Trash so macOS
 offers the final app. The release task and verification record own publication,
 update-feed and installation evidence.
+
+## MOLE-003: explicit eligibility, unknown evidence stays read-only
+
+Date: 2026-10-17. Source: the user's approved Mole-only safety plan and priority
+of avoiding recommendations to remove files that should be kept.
+
+Choice: table paths discover candidates but do not authorize cleanup. Require
+explicit supported eligibility, complete current safety evidence and final
+source-rule/identity checks. Keep unsupported rules and generic project artifacts
+read-only instead of inferring disposability from names or age. Related uninstall
+data stays read-only; explicit app-bundle removal is a separate reviewed action.
+
+Consequences: the current 469-rule inventory enables two recommendation rules
+and five manual-review rules; 462 remain unsupported/read-only. This is reduced
+coverage, not full upstream parity or universal safety. Media hardening and
+installed/public release changes require separate work. The
+[safety task](.hermes/plans/2026-10-16_022302-safety-hardening.md) owns evidence,
+independent review and the outstanding native acceptance checks.

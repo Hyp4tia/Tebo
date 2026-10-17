@@ -73,7 +73,10 @@ struct OrphanScannerTests {
             try data.write(to: contents.appendingPathComponent("Info.plist"))
         }
 
-        func config(minimumOrphanAge: TimeInterval = 0) -> OrphanScanConfiguration {
+        func config(
+            minimumOrphanAge: TimeInterval = 0,
+            rebuildableCacheBundleIDs: Set<String> = []
+        ) -> OrphanScanConfiguration {
             func joined(_ relative: String) -> String {
                 library.appendingPathComponent(relative).path
             }
@@ -83,16 +86,21 @@ struct OrphanScannerTests {
                 preferenceRoots: [joined("Preferences")],
                 launchAgentRoots: [joined("LaunchAgents")],
                 applicationRoots: [apps.path],
-                minimumOrphanAge: minimumOrphanAge
+                minimumOrphanAge: minimumOrphanAge,
+                rebuildableCacheBundleIDs: rebuildableCacheBundleIDs
             )
         }
 
         func scanner(
             minimumOrphanAge: TimeInterval = 0,
+            rebuildableCacheBundleIDs: Set<String> = [],
             lookup: (any BundleLookup)? = nil
         ) -> OrphanScanner {
             OrphanScanner(
-                configuration: config(minimumOrphanAge: minimumOrphanAge),
+                configuration: config(
+                    minimumOrphanAge: minimumOrphanAge,
+                    rebuildableCacheBundleIDs: rebuildableCacheBundleIDs
+                ),
                 bundleLookup: lookup ?? InstalledAppsBundleLookup(
                     appRoots: [apps.path], useSpotlightFallback: false
                 )
@@ -105,6 +113,233 @@ struct OrphanScannerTests {
         func isInstalled(bundleID: String) async -> BundleLookupResult { .unknown }
     }
 
+    struct NegativeOnlyLookup: BundleLookup {
+        func isInstalled(bundleID: String) async -> BundleLookupResult { .notInstalled }
+    }
+
+    @Test("A lookup without a fresh probe cannot reuse negative absence at removal time")
+    func freshLookupFallbackFailsClosed() async throws {
+        let fixture = try Fixture()
+        defer { fixture.tearDown() }
+        let cacheFile = try fixture.write("cache", at: "Caches/com.fixture.cache/cache.bin")
+        let scanner = OrphanScanner(
+            configuration: fixture.config(minimumOrphanAge: 0, rebuildableCacheBundleIDs: ["com.fixture.cache"]),
+            bundleLookup: NegativeOnlyLookup()
+        )
+
+        let reason = await scanner.removalProtectionReason(
+            for: cacheFile.deletingLastPathComponent().path, whitelist: []
+        )
+
+        #expect(reason?.contains("Fresh bundle lookup unavailable") == true)
+    }
+
+    @Test("Application Support, Preferences, and LaunchAgents are read-only even without an installed app")
+    func personalStateIsReadOnly() async throws {
+        let fixture = try Fixture()
+        defer { fixture.tearDown() }
+        _ = try fixture.write("database", at: "Application Support/com.gone.app/history.sqlite")
+        _ = try fixture.write("preferences", at: "Preferences/com.gone.app.plist")
+        _ = try fixture.writePlist(
+            ["Label": "com.gone.agent", "ProgramArguments": [fixture.root.appendingPathComponent("missing/agent").path]],
+            at: "LaunchAgents/com.gone.agent.plist"
+        )
+
+        let report = await fixture.scanner(minimumOrphanAge: 0).scan()
+        let paths = Set(report.kept.map { URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path })
+
+        #expect(report.orphans.isEmpty)
+        #expect(paths.contains(fixture.library.appendingPathComponent("Application Support/com.gone.app").resolvingSymlinksInPath().path))
+        #expect(paths.contains(fixture.library.appendingPathComponent("Preferences/com.gone.app.plist").resolvingSymlinksInPath().path))
+        #expect(paths.contains(fixture.library.appendingPathComponent("LaunchAgents/com.gone.agent.plist").resolvingSymlinksInPath().path))
+    }
+
+    @Test("Missing app ownership alone does not make a cache disposable")
+    func cacheRequiresSupportedOwnerPolicy() async throws {
+        let fixture = try Fixture()
+        defer { fixture.tearDown() }
+        _ = try fixture.write("cache", at: "Caches/com.gone.app/cache.bin")
+
+        let report = await fixture.scanner(minimumOrphanAge: 0).scan()
+        let kept = report.kept.first { $0.name == "com.gone.app" }
+        let expected = fixture.library.appendingPathComponent("Caches/com.gone.app").resolvingSymlinksInPath().path
+
+        #expect(report.orphans.isEmpty)
+        #expect(kept.map { URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path } == expected)
+        #expect(kept?.reason.contains("supported cache-owner policy") == true)
+    }
+
+    @Test("A symlinked cache scan root is kept without traversal")
+    func symlinkedCacheRootIsNotScanned() async throws {
+        let fixture = try Fixture()
+        defer { fixture.tearDown() }
+        _ = try fixture.write("cache", at: "Caches/com.fixture.cache/cache.bin")
+        let cacheRoot = fixture.library.appendingPathComponent("Caches", isDirectory: true)
+        let alias = fixture.library.appendingPathComponent("CachesAlias", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: cacheRoot)
+        var config = fixture.config(rebuildableCacheBundleIDs: ["com.fixture.cache"])
+        config.cacheRoots = [alias.path]
+        let scanner = OrphanScanner(
+            configuration: config,
+            bundleLookup: InstalledAppsBundleLookup(appRoots: [fixture.apps.path], useSpotlightFallback: false)
+        )
+
+        let report = await scanner.scan()
+
+        #expect(report.orphans.isEmpty)
+        #expect(report.kept.contains { $0.reason.contains("root is linked") })
+    }
+
+    @Test("A cache owner file is kept because only complete cache trees qualify")
+    func cacheOwnerFileIsKept() async throws {
+        let fixture = try Fixture()
+        defer { fixture.tearDown() }
+        _ = try fixture.write("not a tree", at: "Caches/com.fixture.cache")
+        let scanner = fixture.scanner(
+            rebuildableCacheBundleIDs: ["com.fixture.cache"]
+        )
+
+        let report = await scanner.scan()
+
+        #expect(report.orphans.isEmpty)
+        #expect(report.kept.contains {
+            $0.path.hasSuffix("/Caches/com.fixture.cache")
+                && $0.reason.contains("not a directory")
+        })
+    }
+
+    @Test("A recent descendant keeps an old-supported cache tree")
+    func recentDescendantKeepsCache() async throws {
+        let fixture = try Fixture()
+        defer { fixture.tearDown() }
+        let old = Date(timeIntervalSinceNow: -60 * 24 * 60 * 60)
+        let oldFile = try fixture.write("old", at: "Caches/com.fixture.cache/old.bin")
+        try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: oldFile.path)
+        let recentFile = try fixture.write("recent", at: "Caches/com.fixture.cache/nested/recent.bin")
+        let cacheRoot = recentFile.deletingLastPathComponent().deletingLastPathComponent()
+        try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: cacheRoot.path)
+        var config = fixture.config(minimumOrphanAge: 30 * 24 * 60 * 60)
+        config.rebuildableCacheBundleIDs = ["com.fixture.cache"]
+        let scanner = OrphanScanner(configuration: config, bundleLookup: InstalledAppsBundleLookup(
+            appRoots: [fixture.apps.path], useSpotlightFallback: false
+        ))
+
+        let report = await scanner.scan()
+
+        #expect(!report.orphans.contains {
+            URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path
+                == cacheRoot.resolvingSymlinksInPath().path
+        })
+        #expect(report.kept.contains {
+            URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path
+                == cacheRoot.resolvingSymlinksInPath().path
+                && $0.reason.contains("retention window")
+        })
+    }
+
+    @Test("An incomplete installed-app inventory keeps an otherwise supported cache")
+    func incompleteAppInventoryKeepsCache() async throws {
+        let fixture = try Fixture()
+        defer { fixture.tearDown() }
+        let cache = try fixture.write("cache", at: "Caches/com.fixture.cache/cache.bin")
+        let appContents = fixture.apps.appendingPathComponent("Unreadable.app/Contents", isDirectory: true)
+        try FileManager.default.createDirectory(at: appContents, withIntermediateDirectories: true)
+        try Data("not a property list".utf8).write(to: appContents.appendingPathComponent("Info.plist"))
+        var config = fixture.config(minimumOrphanAge: 0)
+        config.rebuildableCacheBundleIDs = ["com.fixture.cache"]
+        let scanner = OrphanScanner(configuration: config, bundleLookup: InstalledAppsBundleLookup(
+            appRoots: [fixture.apps.path], useSpotlightFallback: false
+        ))
+
+        let report = await scanner.scan()
+
+        #expect(report.orphans.isEmpty)
+        #expect(report.kept.contains {
+            URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path
+                == URL(fileURLWithPath: cache.deletingLastPathComponent().path).resolvingSymlinksInPath().path
+                && $0.reason.contains("inventory is incomplete")
+        })
+    }
+
+    @Test("Removal policy refreshes a cached negative bundle lookup")
+    func removalLookupIsFresh() async throws {
+        let fixture = try Fixture()
+        defer { fixture.tearDown() }
+        let cacheFile = try fixture.write("cache", at: "Caches/com.fixture.cache/cache.bin")
+        var config = fixture.config(minimumOrphanAge: 0)
+        config.rebuildableCacheBundleIDs = ["com.fixture.cache"]
+        let lookup = InstalledAppsBundleLookup(appRoots: [fixture.apps.path], useSpotlightFallback: false)
+        let scanner = OrphanScanner(configuration: config, bundleLookup: lookup)
+
+        let firstPass = await scanner.scan()
+        #expect(firstPass.orphans.contains {
+            URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path
+                == cacheFile.deletingLastPathComponent().resolvingSymlinksInPath().path
+        })
+        try fixture.installApp(folder: "NewlyInstalled.app", bundleID: "com.fixture.cache")
+        let reason = await scanner.removalProtectionReason(
+            for: cacheFile.deletingLastPathComponent().path, whitelist: []
+        )
+
+        #expect(reason?.contains("Owned by an installed app") == true)
+    }
+
+    @Test("Final cache validation refuses a symlinked ancestor alias")
+    func finalCacheValidationRejectsSymlinkAncestor() async throws {
+        let fixture = try Fixture()
+        defer { fixture.tearDown() }
+        _ = try fixture.write("cache", at: "Caches/com.fixture.cache/cache.bin")
+        let config = fixture.config(minimumOrphanAge: 0, rebuildableCacheBundleIDs: ["com.fixture.cache"])
+        let cacheRoot = fixture.library.appendingPathComponent("Caches", isDirectory: true)
+        let alias = fixture.library.appendingPathComponent("CachesAlias", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: cacheRoot)
+        let scanner = OrphanScanner(
+            configuration: config,
+            bundleLookup: InstalledAppsBundleLookup(appRoots: [fixture.apps.path], useSpotlightFallback: false)
+        )
+
+        let reason = await scanner.removalProtectionReason(
+            for: alias.appendingPathComponent("com.fixture.cache").path, whitelist: []
+        )
+
+        #expect(reason?.contains("direct child") == true)
+    }
+
+    @Test("Spotlight truncation cannot establish that an app is absent")
+    func spotlightTruncationIsUnknown() {
+        #expect(InstalledAppsBundleLookup.spotlightResult(
+            terminationStatus: 0, stdout: "", outputTruncated: true
+        ) == .unknown)
+        #expect(InstalledAppsBundleLookup.spotlightResult(
+            terminationStatus: 0, stdout: "", outputTruncated: false
+        ) == .notInstalled)
+    }
+
+    @Test("An explicitly supported stale cache owner is still discoverable")
+    func supportedCachePositiveControl() async throws {
+        let fixture = try Fixture()
+        defer { fixture.tearDown() }
+        let cacheFile = try fixture.write("rebuildable", at: "Caches/com.fixture.cache/cache.bin")
+        let old = Date(timeIntervalSinceNow: -45 * 24 * 60 * 60)
+        try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: cacheFile.path)
+        let cacheRoot = cacheFile.deletingLastPathComponent()
+        try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: cacheRoot.path)
+
+        var config = fixture.config(minimumOrphanAge: 30 * 24 * 60 * 60)
+        config.rebuildableCacheBundleIDs = ["com.fixture.cache"]
+        let scanner = OrphanScanner(configuration: config, bundleLookup: InstalledAppsBundleLookup(
+            appRoots: [fixture.apps.path], useSpotlightFallback: false
+        ))
+        let report = await scanner.scan()
+
+        #expect(report.orphans.count == 1)
+        #expect(report.orphans.first.map {
+            URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path
+        } == cacheRoot.resolvingSymlinksInPath().path)
+        #expect(report.orphans.first?.category == .caches)
+        #expect(report.orphans.first?.sizeBytes == Int64("rebuildable".utf8.count))
+    }
+
     @Test("Flags bundle-id leftovers when no app owns them")
     func flagsBundleIDLeftovers() async throws {
         let fixture = try Fixture()
@@ -114,30 +349,22 @@ struct OrphanScannerTests {
         _ = try fixture.write("123456", at: "Application Support/com.gone.app/cache.db")
         _ = try fixture.write("data", at: "Caches/com.gone.app/a.txt")
         _ = try fixture.write("x", at: "Preferences/com.gone.app.plist")
-        let agentURL = try fixture.writePlist(
+        _ = try fixture.writePlist(
             ["Label": "com.gone.agent", "ProgramArguments": [fixture.root.appendingPathComponent("uninstalled/Gone.app/Contents/MacOS/Gone").path]],
             at: "LaunchAgents/com.gone.agent.plist"
         )
-        let agentSize = Int64((try? agentURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        let report = await fixture.scanner(
+            rebuildableCacheBundleIDs: ["com.gone.app"]
+        ).scan()
 
-        let report = await fixture.scanner().scan()
-
-        #expect(report.itemCount == 4)
-        let byCategory = Dictionary(grouping: report.orphans, by: \.category)
-        #expect(byCategory[.applicationSupport]?.count == 1)
-        #expect(byCategory[.caches]?.count == 1)
-        #expect(byCategory[.preferences]?.count == 1)
-        #expect(byCategory[.launchAgent]?.count == 1)
-
-        let appSupport = try #require(byCategory[.applicationSupport]?.first)
-        #expect(appSupport.name == "com.gone.app")
-        #expect(appSupport.sizeBytes == 6)
-        #expect(appSupport.lastModified != nil)
-        #expect(appSupport.reason.contains("com.gone.app"))
-
-        let agent = try #require(byCategory[.launchAgent]?.first)
-        #expect(agent.reason.contains("/uninstalled/Gone.app"))
-        #expect(report.totalBytes == 6 + 4 + 1 + agentSize)
+        #expect(report.itemCount == 1)
+        #expect(report.orphans.first?.category == .caches)
+        #expect(report.orphans.first?.path.hasSuffix("/Caches/com.gone.app") == true)
+        #expect(report.totalBytes == 4)
+        let keptPaths = Set(report.kept.map { URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path })
+        #expect(keptPaths.contains(fixture.library.appendingPathComponent("Application Support/com.gone.app").resolvingSymlinksInPath().path))
+        #expect(keptPaths.contains(fixture.library.appendingPathComponent("Preferences/com.gone.app.plist").resolvingSymlinksInPath().path))
+        #expect(keptPaths.contains(fixture.library.appendingPathComponent("LaunchAgents/com.gone.agent.plist").resolvingSymlinksInPath().path))
     }
 
     @Test("Keeps Apple system names")
@@ -161,18 +388,21 @@ struct OrphanScannerTests {
     func keepsSensitiveNames() async throws {
         let fixture = try Fixture()
         defer { fixture.tearDown() }
-        // org.openssh.ssh is a reverse-DNS name, but the sensitive gate
-        // fires before any bundle probe (Mole apps.sh:410-420 order).
-        _ = try fixture.write("data", at: "Application Support/org.openssh.ssh/x")
-        _ = try fixture.write("data", at: "Application Support/1Password/x")
+        // These reverse-DNS cache owners are explicitly opted in only to prove
+        // the security-sensitive owner gate wins before absence is considered.
+        _ = try fixture.write("data", at: "Caches/org.openssh.ssh/x")
+        _ = try fixture.write("data", at: "Caches/com.1password.manager/x")
         _ = try fixture.write("data", at: "Caches/com.bitwarden.desktop/x")
 
-        let report = await fixture.scanner().scan()
+        let report = await fixture.scanner(
+            rebuildableCacheBundleIDs: ["org.openssh.ssh", "com.1password.manager", "com.bitwarden.desktop"]
+        ).scan()
 
         #expect(report.orphans.isEmpty)
-        #expect(report.kept.contains { $0.name == "org.openssh.ssh" && $0.reason.contains("Security-sensitive") })
-        #expect(report.kept.contains { $0.name == "1Password" })
-        #expect(report.kept.contains { $0.name == "com.bitwarden.desktop" })
+        #expect(report.kept.filter { $0.reason.contains("Security-sensitive") }.count == 3)
+        #expect(Set(report.kept.map(\.name)).isSuperset(of: [
+            "org.openssh.ssh", "com.1password.manager", "com.bitwarden.desktop",
+        ]))
     }
 
     @Test("Keeps entries owned by an installed app")
@@ -186,27 +416,33 @@ struct OrphanScannerTests {
         _ = try fixture.write("x", at: "Preferences/com.installed.app.plist")
         _ = try fixture.writePlist(["Label": "com.installed.app", "ProgramArguments": ["/bin/true"]], at: "LaunchAgents/com.installed.app.plist")
 
-        let report = await fixture.scanner().scan()
+        let report = await fixture.scanner(
+            rebuildableCacheBundleIDs: ["com.installed.app"]
+        ).scan()
 
         #expect(report.orphans.isEmpty)
-        #expect(report.kept.contains { $0.name == "Installed" && $0.reason == "Owned by installed app Installed" })
+        #expect(report.kept.contains { $0.name == "Installed" && $0.reason.contains("personal app data") })
         #expect(report.kept.contains { $0.name == "com.installed.app" && $0.reason.contains("Owned by an installed app") })
-        #expect(report.kept.contains { $0.name == "com.installed.app.plist" && $0.reason.contains("Agent belongs to installed app") })
+        #expect(report.kept.contains { $0.name == "com.installed.app.plist" && $0.reason.contains("LaunchAgents") })
     }
 
     @Test("Age gate keeps recent entries, flags stale ones")
     func ageGate() async throws {
         let fixture = try Fixture()
         defer { fixture.tearDown() }
-        _ = try fixture.write("data", at: "Application Support/com.recent.app/x")
+        _ = try fixture.write("data", at: "Caches/com.recent.app/x")
 
-        // Fresh fixture: mtime is now, so a 1-hour retention window keeps it.
-        let recentReport = await fixture.scanner(minimumOrphanAge: 3600).scan()
+        // Fresh fixture: a one-hour retention window keeps the whole cache tree.
+        let recentReport = await fixture.scanner(
+            minimumOrphanAge: 3600, rebuildableCacheBundleIDs: ["com.recent.app"]
+        ).scan()
         #expect(recentReport.orphans.isEmpty)
         #expect(recentReport.kept.contains { $0.reason.contains("retention window") })
 
-        // Same tree with the gate disabled: the missing bundle id decides.
-        let agedReport = await fixture.scanner(minimumOrphanAge: 0).scan()
+        // Same tree with the age gate disabled and explicit cache policy.
+        let agedReport = await fixture.scanner(
+            minimumOrphanAge: 0, rebuildableCacheBundleIDs: ["com.recent.app"]
+        ).scan()
         #expect(agedReport.itemCount == 1)
         #expect(agedReport.orphans.first?.name == "com.recent.app")
     }
@@ -221,21 +457,27 @@ struct OrphanScannerTests {
         _ = try fixture.write("x", at: "Preferences/foo.plist")
 
         let report = await fixture.scanner().scan()
+        let keptPaths = Set(report.kept.map { URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path })
 
         #expect(report.orphans.isEmpty)
-        #expect(report.kept.filter { $0.reason.contains("No bundle identifier") }.count == 4)
+        #expect(keptPaths.contains(fixture.library.appendingPathComponent("Application Support/SomeCLITool").resolvingSymlinksInPath().path))
+        #expect(keptPaths.contains(fixture.library.appendingPathComponent("Application Support/Maestro Studio").resolvingSymlinksInPath().path))
+        #expect(keptPaths.contains(fixture.library.appendingPathComponent("Caches/nginx").resolvingSymlinksInPath().path))
+        #expect(keptPaths.contains(fixture.library.appendingPathComponent("Preferences/foo.plist").resolvingSymlinksInPath().path))
     }
 
     @Test("Keeps entries when the bundle lookup answers unknown")
     func keepsOnUnknownLookup() async throws {
         let fixture = try Fixture()
         defer { fixture.tearDown() }
-        _ = try fixture.write("data", at: "Application Support/com.gone.app/x")
+        _ = try fixture.write("data", at: "Caches/com.gone.app/x")
 
-        let report = await fixture.scanner(lookup: UnknownLookup()).scan()
+        let report = await fixture.scanner(
+            rebuildableCacheBundleIDs: ["com.gone.app"], lookup: UnknownLookup()
+        ).scan()
 
         #expect(report.orphans.isEmpty)
-        #expect(report.kept.contains { $0.reason.contains("unavailable") })
+        #expect(report.kept.contains { $0.reason.contains("Bundle lookup unavailable") })
     }
 
     @Test("Keeps LaunchAgents whose program still exists")
@@ -255,7 +497,10 @@ struct OrphanScannerTests {
         let report = await fixture.scanner().scan()
 
         #expect(report.orphans.isEmpty)
-        #expect(report.kept.contains { $0.reason.contains("still installed") && $0.reason.contains("Helper") })
+        #expect(report.kept.contains {
+            $0.path.hasSuffix("LaunchAgents/com.gone.agent.plist")
+                && $0.reason == "LaunchAgents are user-owned automation and remain read-only"
+        })
     }
 
     @Test("Keeps agents with no absolute program path")
@@ -270,7 +515,10 @@ struct OrphanScannerTests {
         let report = await fixture.scanner().scan()
 
         #expect(report.orphans.isEmpty)
-        #expect(report.kept.contains { $0.reason.contains("No absolute program path") })
+        #expect(report.kept.contains {
+            $0.path.hasSuffix("LaunchAgents/com.gone.agent.plist")
+                && $0.reason == "LaunchAgents are user-owned automation and remain read-only"
+        })
     }
 
     @Test("Keeps unreadable agent plists and non-bundle-id labels")
@@ -286,8 +534,14 @@ struct OrphanScannerTests {
         let report = await fixture.scanner().scan()
 
         #expect(report.orphans.isEmpty)
-        #expect(report.kept.contains { $0.name == "broken.plist" && $0.reason.contains("unreadable") })
-        #expect(report.kept.contains { $0.name == "myagent.plist" && $0.reason.contains("not a bundle identifier") })
+        #expect(report.kept.contains {
+            $0.name == "broken.plist" && $0.path.hasSuffix("LaunchAgents/broken.plist")
+                && $0.reason == "LaunchAgents are user-owned automation and remain read-only"
+        })
+        #expect(report.kept.contains {
+            $0.name == "myagent.plist" && $0.path.hasSuffix("LaunchAgents/myagent.plist")
+                && $0.reason == "LaunchAgents are user-owned automation and remain read-only"
+        })
     }
 
     @Test("Matches Mole naming variants for installed apps")
@@ -302,47 +556,75 @@ struct OrphanScannerTests {
         )
         _ = try fixture.write("data", at: "Application Support/MaestroStudio/x")
         _ = try fixture.write("data", at: "Application Support/maestro-studio/x")
+        _ = try fixture.write("data", at: "Caches/com.maestro.studio/cache.bin")
 
-        let report = await fixture.scanner().scan()
+        let report = await fixture.scanner(
+            rebuildableCacheBundleIDs: ["com.maestro.studio"]
+        ).scan()
 
         #expect(report.orphans.isEmpty)
-        #expect(report.kept.contains { $0.name == "MaestroStudio" && $0.reason.contains("Owned by installed app Maestro Studio") })
-        #expect(report.kept.contains { $0.name == "maestro-studio" })
+        #expect(report.kept.contains { $0.name == "MaestroStudio" && $0.reason.contains("personal app data") })
+        #expect(report.kept.contains { $0.name == "maestro-studio" && $0.reason.contains("personal app data") })
+        #expect(report.kept.contains {
+            $0.path.hasSuffix("Caches/com.maestro.studio")
+                && $0.reason.contains("Owned by an installed app")
+        })
     }
 
-    @Test("Skips symlinks and dot-prefixed children")
+    @Test("Symlink cache entries are kept without following either link")
     func skipsSymlinksAndDotDirs() async throws {
         let fixture = try Fixture()
         defer { fixture.tearDown() }
-        let target = try fixture.write("data", at: "Application Support/com.real.app/x")
-        let caches = fixture.library.appendingPathComponent("Caches", isDirectory: true)
-        try FileManager.default.createDirectory(at: caches, withIntermediateDirectories: true)
+        let outside = fixture.root.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try Data("outside".utf8).write(to: outside.appendingPathComponent("data"))
+        _ = try fixture.write("rebuildable", at: "Caches/com.real.app/cache.bin")
+        let cacheRoot = fixture.library.appendingPathComponent("Caches/com.real.app", isDirectory: true)
         try FileManager.default.createSymbolicLink(
-            at: caches.appendingPathComponent("com.linked.app"),
-            withDestinationURL: target.deletingLastPathComponent()
+            at: cacheRoot.appendingPathComponent("linked"), withDestinationURL: outside
         )
-        _ = try fixture.write("data", at: "Application Support/.config/x")
+        let caches = fixture.library.appendingPathComponent("Caches", isDirectory: true)
+        try FileManager.default.createSymbolicLink(
+            at: caches.appendingPathComponent("com.linked.app"), withDestinationURL: outside
+        )
+        _ = try fixture.write("dot state", at: "Caches/.config/x")
 
-        let report = await fixture.scanner().scan()
+        let report = await fixture.scanner(
+            rebuildableCacheBundleIDs: ["com.real.app"]
+        ).scan()
+        let unsafeSuffix = "/\(fixture.root.lastPathComponent)/Library/Caches/com.real.app"
 
-        // The symlink and the dot directory are never evaluated at all,
-        // and the real orphan the symlink points at still shows.
-        #expect(report.orphans.count == 1)
-        #expect(!report.kept.contains { $0.name == "com.linked.app" })
-        #expect(!report.kept.contains { $0.name == ".config" })
-        #expect(report.orphans.contains { $0.name == "com.real.app" })
+        #expect(report.orphans.isEmpty)
+        #expect(report.kept.contains {
+            $0.path.hasSuffix(unsafeSuffix) && $0.reason.contains("symlink")
+        })
+        #expect(report.kept.contains {
+            $0.path.hasSuffix("/\(fixture.root.lastPathComponent)/Library/Caches/.config")
+                && $0.reason.contains("Dot-prefixed")
+        })
+        #expect(report.kept.contains {
+            $0.name == "com.linked.app"
+                && $0.path.hasSuffix("/Library/Caches/com.linked.app")
+                && $0.reason.lowercased().contains("symlink")
+        })
+        #expect(!report.orphans.contains { $0.path.hasSuffix(unsafeSuffix) })
     }
 
     @Test("Skips zero-size leftovers like Mole's size gate")
     func skipsZeroSize() async throws {
         let fixture = try Fixture()
         defer { fixture.tearDown() }
-        _ = try fixture.write("", at: "Application Support/com.empty.app/.keep")
+        _ = try fixture.write("", at: "Caches/com.empty.app/.keep")
 
-        let report = await fixture.scanner().scan()
+        let report = await fixture.scanner(
+            rebuildableCacheBundleIDs: ["com.empty.app"]
+        ).scan()
 
         #expect(report.orphans.isEmpty)
-        #expect(!report.kept.contains { $0.name == "com.empty.app" })
+        #expect(report.kept.contains {
+            $0.path.hasSuffix("Caches/com.empty.app")
+                && $0.reason.contains("positive-size evidence")
+        })
     }
 
     @Test("Never scans Preferences/ByHost")
@@ -361,14 +643,15 @@ struct OrphanScannerTests {
     func sizeWalkBudgetStopsTheWalk() async throws {
         let fixture = try Fixture()
         defer { fixture.tearDown() }
-        // An orphaned directory with more entries than the budget allows.
-        _ = try fixture.write("payload", at: "Application Support/com.gone.app/a.txt")
-        _ = try fixture.write("payload", at: "Application Support/com.gone.app/b.txt")
-        _ = try fixture.write("payload", at: "Application Support/com.gone.app/c.txt")
-        _ = try fixture.write("payload", at: "Application Support/com.gone.app/d.txt")
-        _ = try fixture.write("payload", at: "Application Support/com.gone.app/e.txt")
+        // A supported cache tree with more entries than the evidence budget
+        // must be kept, not exposed with a partial size or age verdict.
+        _ = try fixture.write("payload", at: "Caches/com.gone.app/a.txt")
+        _ = try fixture.write("payload", at: "Caches/com.gone.app/b.txt")
+        _ = try fixture.write("payload", at: "Caches/com.gone.app/c.txt")
+        _ = try fixture.write("payload", at: "Caches/com.gone.app/d.txt")
+        _ = try fixture.write("payload", at: "Caches/com.gone.app/e.txt")
 
-        var config = fixture.config()
+        var config = fixture.config(rebuildableCacheBundleIDs: ["com.gone.app"])
         config.sizeWalkEntryBudget = 3
         let scanner = OrphanScanner(
             configuration: config,
@@ -379,13 +662,11 @@ struct OrphanScannerTests {
 
         let report = await scanner.scan()
 
-        // The scan returned (a runaway walk would time this test out) and
-        // the row is present with its size flagged incomplete so the UI
-        // can show "unavailable" instead of a wrong exact number.
-        let row = report.orphans.first { $0.name == "com.gone.app" }
-        #expect(row != nil)
-        #expect(row?.isSizeComplete == false)
-        #expect(row?.displaySize == "Unavailable")
+        #expect(report.orphans.isEmpty)
+        #expect(report.kept.contains {
+            $0.path.hasSuffix("Caches/com.gone.app")
+                && $0.reason.contains("traversal is incomplete")
+        })
     }
 
     @Test("Name variants cover Mole's forms")

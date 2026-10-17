@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 struct ProjectArtifactReport: Sendable {
@@ -9,8 +10,13 @@ struct ProjectArtifactReport: Sendable {
 struct ProjectArtifactScanner: Sendable {
     let roots: [String]
     let maxDepth: Int
-    init(roots: [String] = MolePaths.projectSearchRoots, maxDepth: Int = 6) {
-        self.roots = roots; self.maxDepth = maxDepth
+    private let isCloudPlaceholder: @Sendable (URL) -> Bool
+
+    init(roots: [String] = MolePaths.projectSearchRoots, maxDepth: Int = 6,
+         isCloudPlaceholder: @escaping @Sendable (URL) -> Bool = ProjectArtifactScanner.hasCloudPlaceholderMetadata) {
+        self.roots = roots
+        self.maxDepth = maxDepth
+        self.isCloudPlaceholder = isCloudPlaceholder
     }
 
     func scan(whitelist: Set<String>, timeout: TimeInterval = 60) async -> ProjectArtifactReport {
@@ -20,70 +26,157 @@ struct ProjectArtifactScanner: Sendable {
 
     private func scanOffMain(whitelist: Set<String>, timeout: TimeInterval) async -> ProjectArtifactReport {
         let deadline = Date.now.addingTimeInterval(timeout)
-        var pending = roots.map { (URL(fileURLWithPath: $0).resolvingSymlinksInPath(), 0) }
-        var rows: [ScanResult] = [], kept: [AdvisoryRow] = []
+        var pending = roots.map { (URL(fileURLWithPath: $0).standardizedFileURL, 0) }
+        var kept: [AdvisoryRow] = []
         var visited: Set<String> = []
         var partial = false
         var walked = 0
+
+        func keep(_ url: URL, _ reason: String) {
+            kept.append(.init(id: url.path, title: url.lastPathComponent, detail: reason, source: url.path))
+        }
+
         while let (directory, depth) = pending.popLast() {
-            if Task.isCancelled || Date.now >= deadline || walked > 20_000 || rows.count >= 500 { partial = true; break }
-            guard visited.insert(directory.path).inserted else { continue }
-            guard let children = try? FileManager.default.contentsOfDirectory(at: directory,
-                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey]) else {
-                partial = true; continue
+            if Task.isCancelled || Date.now >= deadline || walked > 20_000 || kept.count >= 500 {
+                partial = true
+                break
             }
+            guard visited.insert(directory.path).inserted else { continue }
+            guard let values = try? directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]) else {
+                partial = true
+                keep(directory, "Directory could not be verified; contents retained read-only")
+                continue
+            }
+            guard values.isDirectory == true, values.isSymbolicLink != true else {
+                partial = true
+                keep(directory, "Search root is not a readable physical directory; contents retained")
+                continue
+            }
+            if isCloudPlaceholder(directory) {
+                keep(directory, "Cloud-managed placeholder; contents were not traversed")
+                continue
+            }
+            guard let children = try? FileManager.default.contentsOfDirectory(at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isUbiquitousItemKey]) else {
+                partial = true
+                keep(directory, "Directory could not be read; contents retained read-only")
+                continue
+            }
+
             for child in children {
                 walked += 1
-                if Task.isCancelled || Date.now >= deadline { partial = true; break }
-                guard let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
-                      values.isDirectory == true, values.isSymbolicLink != true else { continue }
+                if Task.isCancelled || Date.now >= deadline || walked > 20_000 || kept.count >= 500 {
+                    partial = true
+                    break
+                }
                 let name = child.lastPathComponent
+                guard let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]) else {
+                    partial = true
+                    keep(child, "Entry could not be verified; contents retained read-only")
+                    continue
+                }
                 if [".git", ".hg", ".svn"].contains(name) { continue }
-                if MolePaths.purgeFolderNames.contains(name) {
-                    let reason = await protectionReason(for: child, whitelist: whitelist)
-                    if let reason {
-                        kept.append(.init(id: child.path, title: name, detail: reason, source: child.path)); continue
+                if isCloudPlaceholder(child) {
+                    keep(child, "Cloud-managed placeholder; contents were not traversed")
+                    continue
+                }
+                guard values.isDirectory == true, values.isSymbolicLink != true else {
+                    if values.isSymbolicLink == true,
+                       MolePaths.purgeFolderNames.contains(name) || name == ".worktrees" {
+                        keep(child, name == ".worktrees"
+                            ? "Git worktree link is not inspected or selected"
+                            : "Symbolic-link artifact is not inspected or selected")
                     }
-                    let measured = FileTreeMeasurement.read(child)
-                    let old = measured.newestModification.map { $0 < Date.now.addingTimeInterval(-7 * 86_400) } ?? false
-                    rows.append(ScanResult(path: child.path, sizeBytes: measured.bytes,
-                        category: directory.lastPathComponent, reason: old ? "Rebuildable \(name), inactive for over 7 days"
-                            : "Rebuildable \(name), recent activity: review before removal",
-                        recommendedForSelection: old && measured.status == .complete,
-                        isSizeComplete: measured.status == .complete))
-                } else if depth < maxDepth, !name.hasPrefix(".") || name == ".codex" || name == ".worktrees" {
+                    continue
+                }
+                if name == ".worktrees" {
+                    keep(child, "Git worktree data is retained read-only")
+                    continue
+                }
+                if MolePaths.purgeFolderNames.contains(name) {
+                    keep(child, readOnlyReason(for: child, whitelist: whitelist))
+                    continue
+                }
+                if depth < maxDepth && (!name.hasPrefix(".") || name == ".codex") {
                     pending.append((child, depth + 1))
                 }
             }
         }
-        return ProjectArtifactReport(rows: rows.sorted { $0.sizeBytes > $1.sizeBytes }, kept: kept, partial: partial)
+        return ProjectArtifactReport(rows: [], kept: kept, partial: partial)
     }
 
-    // Reused at discovery and immediately before deletion, as in Mole's purge sink.
+    private func readOnlyReason(for url: URL, whitelist: Set<String>) -> String {
+        if let reason = PathValidator.validate(path: url.path, whitelist: whitelist) {
+            return "\(reason.rawValue); artifact kept read-only"
+        }
+        if url.lastPathComponent == "vendor" { return "Vendored source is kept read-only" }
+        if hasRepositoryAncestor(for: url) { return "Project repository contents are kept read-only" }
+        return "No reviewed tool-specific rebuildability proof; retained for manual review"
+    }
+
+    // Called by the owning view through DeletePipeline's final additional validator.
+    // Project artifacts currently have no supported deletion policy, so every path is
+    // refused. The live bounded walk still distinguishes newly active and unknown data.
     func protectionReason(for url: URL, whitelist: Set<String>) async -> String? {
         if let reason = PathValidator.validate(path: url.path, whitelist: whitelist) { return reason.rawValue }
-        guard MolePaths.purgeFolderNames.contains(url.lastPathComponent) else { return "Not a rebuildable artifact folder" }
-        let measured = FileTreeMeasurement.read(url, stopAtSafetyEvidence: true)
-        if measured.containsRepository { return "Contains a nested repository" }
-        if measured.containsCredentials { return "Contains credentials or deployment keys" }
-        guard measured.status == .complete else { return "Content scan incomplete; folder kept" }
-        // vendor can be authored or intentionally vendored source. Never infer it is disposable.
-        if url.lastPathComponent == "vendor" { return "Vendored source is kept" }
-        var ancestor = url.deletingLastPathComponent().resolvingSymlinksInPath()
-        while ancestor.path != "/" {
-            if FileManager.default.fileExists(atPath: ancestor.appendingPathComponent(".git").path) {
-                let relative = String(url.resolvingSymlinksInPath().path.dropFirst(ancestor.path.count + 1))
-                var environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("GIT_") }
-                environment["GIT_OPTIONAL_LOCKS"] = "0"
-                let response = await BoundedProcessRunner.run(executablePath: "/usr/bin/git", arguments: [
-                    "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-C", ancestor.path,
-                    "ls-files", "--", ":(top,literal,icase)\(relative)"], timeout: 5, environment: environment)
-                guard response.terminationStatus == 0, !response.outputTruncated else { return "Repository contents could not be verified" }
-                if !response.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Contains Git-tracked files" }
-                break
-            }
-            ancestor.deleteLastPathComponent()
+        guard MolePaths.purgeFolderNames.contains(url.lastPathComponent) else { return "Not a reviewed project artifact folder" }
+        guard isWithinConfiguredRoot(url) else { return "Artifact is outside the reviewed project roots" }
+        guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
+              values.isDirectory == true, values.isSymbolicLink != true else {
+            return "Artifact identity could not be verified; contents retained"
         }
-        return nil
+        if isCloudPlaceholder(url) { return "Cloud-managed placeholder; contents retained" }
+        if url.lastPathComponent == "vendor" { return "Vendored source is retained" }
+        if hasRepositoryAncestor(for: url) { return "Repository or worktree contents are retained" }
+
+        let measured = FileTreeMeasurement.read(url, timeout: 4, stopAtSafetyEvidence: true, whitelist: whitelist)
+        if measured.containsRepository { return "Contains a nested Git, Hg, or SVN repository" }
+        if measured.containsCredentials { return "Contains credentials or deployment keys" }
+        guard measured.status == .complete, let newest = measured.newestModification else {
+            return "Project content or activity scan incomplete; contents retained"
+        }
+        if newest >= Date.now.addingTimeInterval(-7 * 86_400) {
+            return "Recent project activity; contents retained"
+        }
+        return "No reviewed tool-specific rebuildability policy; project artifact retained read-only"
+    }
+
+    private func isWithinConfiguredRoot(_ url: URL) -> Bool {
+        let path = url.resolvingSymlinksInPath().standardizedFileURL.path
+        return roots.contains { root in
+            let rootPath = URL(fileURLWithPath: root).resolvingSymlinksInPath().standardizedFileURL.path
+            return path.hasPrefix(rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
+        }
+    }
+
+    private func isAtOrWithinConfiguredRoot(_ url: URL) -> Bool {
+        let path = url.resolvingSymlinksInPath().standardizedFileURL.path
+        return roots.contains { root in
+            let rootPath = URL(fileURLWithPath: root).resolvingSymlinksInPath().standardizedFileURL.path
+            return path == rootPath || path.hasPrefix(rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
+        }
+    }
+
+    private func hasRepositoryAncestor(for url: URL) -> Bool {
+        var ancestor = url.resolvingSymlinksInPath().deletingLastPathComponent()
+        while isAtOrWithinConfiguredRoot(ancestor) {
+            for marker in [".git", ".hg", ".svn"] where
+                FileManager.default.fileExists(atPath: ancestor.appendingPathComponent(marker).path) {
+                return true
+            }
+            if ancestor.lastPathComponent == ".worktrees" { return true }
+            let parent = ancestor.deletingLastPathComponent()
+            if parent == ancestor { break }
+            ancestor = parent
+        }
+        return false
+    }
+
+    private static func hasCloudPlaceholderMetadata(_ url: URL) -> Bool {
+        var info = stat()
+        guard lstat(url.path, &info) == 0, !FileTreeMeasurement.isDataless(flags: info.st_flags),
+              let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .volumeIsLocalKey]),
+              values.volumeIsLocal == true else { return true }
+        return values.isUbiquitousItem == true
     }
 }

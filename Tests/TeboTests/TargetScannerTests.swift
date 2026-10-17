@@ -71,6 +71,7 @@ struct TargetScannerTests {
     ) -> CleanTarget {
         CleanTarget(
             label: label, group: .userEssentials, path: path, kind: kind, risk: risk,
+            eligibility: risk == .safe ? .rebuildableCache : .manualReview,
             needsAdmin: needsAdmin, explanation: "test row", processGuard: guardSpec,
             pruneRule: pruneRule, reportOnly: reportOnly, source: "test"
         )
@@ -94,7 +95,7 @@ struct TargetScannerTests {
         #expect(outcome.deletable.map(\.path).allSatisfy { $0.contains("\(home)/Library/Caches/") })
     }
 
-    @Test("Incomplete Clean measurements remain lower bounds and stay unticked")
+    @Test("Incomplete Clean measurements remain read-only")
     func boundedCleanMeasurement() async throws {
         let home = try makeHome(files: [
             "Library/Caches/fixture/one.bin": "12345",
@@ -103,11 +104,7 @@ struct TargetScannerTests {
         defer { try? FileManager.default.removeItem(atPath: home) }
         let outcome = await TargetScanner(home: home, runningProcessNames: [], measurementEntryLimit: 1).scan(
             targets: [target(path: .homeRelative("Library/Caches/fixture"), kind: .directory)], whitelist: [])
-        let row = try #require(outcome.deletable.first)
-        #expect(row.sizeBytes == 5)
-        #expect(!row.isSizeComplete)
-        #expect(!row.recommendedForSelection)
-        #expect(row.displaySize.hasPrefix("≥ "))
+        #expect(outcome.deletable.isEmpty)
         #expect(outcome.advisories.contains { $0.group == "Incomplete measurements" })
     }
 
@@ -251,6 +248,11 @@ struct TargetScannerTests {
         defer { try? FileManager.default.removeItem(atPath: home) }
 
         let versions = "\(home)/Chrome.app/Contents/Frameworks/Chrome Framework.framework/Versions"
+        // Dictionary iteration does not establish chronological version order.
+        try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-20 * 86_400)],
+            ofItemAtPath: "\(versions)/120")
+        try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-10 * 86_400)],
+            ofItemAtPath: "\(versions)/121")
         try FileManager.default.createSymbolicLink(
             atPath: "\(versions)/Current", withDestinationPath: "121"
         )
@@ -265,7 +267,7 @@ struct TargetScannerTests {
         )
 
         #expect(outcome.deletable.count == 1)
-        #expect(outcome.deletable[0].path.hasSuffix("/Versions/120"))
+        #expect(try #require(outcome.deletable.first).path.hasSuffix("/Versions/120"))
     }
 
     @Test("Profile globs expand wildcard parent directories without following symlinks")
@@ -318,7 +320,7 @@ struct TargetScannerTests {
         )
 
         #expect(outcome.deletable.count == 1)
-        #expect(outcome.deletable[0].path.hasSuffix("clean-me"))
+        #expect(try #require(outcome.deletable.first).path.hasSuffix("clean-me"))
     }
 
     @Test("Whole-volume report rows are listed without being walked for a size")

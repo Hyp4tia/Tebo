@@ -18,7 +18,7 @@ struct MaintenanceScanReport: Sendable {
 struct MaintenanceScanner: Sendable {
     let home: String
     init(home: String = NSHomeDirectory()) { self.home = home }
-    func scan(_ mode: MaintenanceScan, whitelist: Set<String>, runningIDs: Set<String>) async -> MaintenanceScanReport {
+    func scan(_ mode: MaintenanceScan, whitelist: Set<String>, runningIDs: Set<String>?) async -> MaintenanceScanReport {
         let worker = Task.detached(priority: .utility) {
             let directory = URL(fileURLWithPath: "\(home)/Library/\(mode == .savedStates ? "Saved Application State" : "Preferences")")
             let keys: Set<URLResourceKey> = [.isSymbolicLinkKey, .contentModificationDateKey, .fileSizeKey]
@@ -32,30 +32,39 @@ struct MaintenanceScanner: Sendable {
                 let bundleID = file.deletingPathExtension().lastPathComponent
                 let relevant = mode == .savedStates ? file.pathExtension == "savedState" : file.pathExtension == "plist"
                 guard relevant, let values = try? file.resourceValues(forKeys: keys), values.isSymbolicLink != true else { continue }
-                if runningIDs.contains(bundleID) || !SafetyGate.isAllowed(path: file.path, whitelist: whitelist) {
-                    kept.append(.init(id: file.path, title: file.lastPathComponent, detail: "Running app or protected data", source: file.path)); continue
+                let owner = bundleID.lowercased()
+                // Exact GUI IDs missed active helpers, and unknown inventory cannot establish inactivity.
+                if runningIDs?.contains(where: { $0.lowercased() == owner || $0.lowercased().hasPrefix(owner + ".") }) != false
+                    || !SafetyGate.isAllowed(path: file.path, whitelist: whitelist) {
+                    kept.append(.init(id: file.path, title: file.lastPathComponent,
+                        detail: runningIDs == nil ? "Process activity could not be verified; item kept" : "Running app/helper or protected data",
+                        source: file.path)); continue
                 }
                 if mode == .savedStates {
                     guard let modified = values.contentModificationDate, modified < Date.now.addingTimeInterval(-30 * 86_400) else { continue }
                 } else {
                     guard let size = values.fileSize, size > 0, size < 5_242_880, let data = try? Data(contentsOf: file) else { continue }
                     let contents = try? PropertyListSerialization.propertyList(from: data, format: nil)
-                    guard !(contents is [String: Any]) else { continue }
+                    // A valid array/scalar plist is not proof of corruption or disposable settings.
+                    guard contents == nil else { continue }
                 }
                 let measured = FileTreeMeasurement.read(file)
                 guard measured.status == .complete else { continue }
                 if mode == .savedStates, let newest = measured.newestModification,
                    newest >= Date.now.addingTimeInterval(-30 * 86_400) { continue }
+                // Saved state can retain unsaved document data; age alone cannot make it disposable.
                 rows.append(ScanResult(path: file.path, sizeBytes: measured.bytes, category: mode.rawValue,
-                    reason: mode == .savedStates ? "Inactive saved state, over 30 days old" : "Invalid preference dictionary; app can rebuild its preferences",
-                    recommendedForSelection: mode == .savedStates))
+                    reason: mode == .savedStates ? "Old saved state may contain unsaved work. Manual review only."
+                        : "Unreadable property-list format; settings may be lost. Manual review only.",
+                    cleanupSource: .maintenance(mode.rawValue)))
             }
             return MaintenanceScanReport(rows: rows, kept: kept)
         }
         return await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
     }
 
-    func removalReason(path: String, mode: MaintenanceScan, whitelist: Set<String>, runningIDs: Set<String>) -> String? {
+    func removalReason(path: String, mode: MaintenanceScan, whitelist: Set<String>, runningIDs: Set<String>?) -> String? {
+        guard let runningIDs else { return "Process activity could not be verified; item kept" }
         let file = URL(fileURLWithPath: path)
         let directory = "\(home)/Library/\(mode == .savedStates ? "Saved Application State" : "Preferences")"
         guard file.deletingLastPathComponent().resolvingSymlinksInPath().path
@@ -77,7 +86,7 @@ struct MaintenanceScanner: Sendable {
             guard let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize,
                   size > 0, size < 5_242_880, let data = try? Data(contentsOf: file) else { return "Preference file could not be checked" }
             let parsed = try? PropertyListSerialization.propertyList(from: data, format: nil)
-            if parsed is [String: Any] { return "Preferences are now valid; file kept" }
+            if parsed != nil { return "This is a valid property list; file kept" }
         }
         return nil
     }

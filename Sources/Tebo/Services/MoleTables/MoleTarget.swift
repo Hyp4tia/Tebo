@@ -8,12 +8,23 @@ import Foundation
 
 // MARK: Risk
 
-/// Whether removing a target is safe by default or needs user review.
+/// Whether removing a target is safe by default or needs user review first.
 public enum MoleRisk: String, Sendable, Equatable {
     /// Rebuildable caches/logs — the owning app recreates them on demand.
     case safe
     /// Real user data — never delete without the user confirming.
     case review
+}
+
+/// Whether the current scanner implements enough source-reviewed behavior to
+/// expose a target for selection. Risk is descriptive; eligibility is the gate.
+public enum MoleEligibility: String, Sendable, Equatable, CaseIterable {
+    /// No complete, reviewed deletion contract exists. The target is read-only.
+    case unsupported
+    /// A narrowly scoped, rebuildable cache with tested positive and negative guards.
+    case rebuildableCache
+    /// A narrowly scoped candidate may be shown for explicit user review, never recommended.
+    case manualReview
 }
 
 // MARK: Group
@@ -56,6 +67,9 @@ public enum MoleTargetKind: Sendable, Equatable {
     case file
     /// Expand the wildcard pattern; matches may be files or directories.
     case glob
+    /// Root of user-owned Group Containers. Scans only direct files under
+    /// approved Logs/Caches subdirectories; never returns a container root.
+    case groupContainerLeaves
     /// Chromium-style app bundle: remove old children of
     /// `<app>/Contents/Frameworks/<framework>/Versions` per MolePruneRule.
     case frameworkVersions(framework: String)
@@ -120,8 +134,10 @@ public struct CleanTarget: Sendable, Equatable {
     public let path: MolePath
     /// How the engine turns the path into deletion candidates.
     public let kind: MoleTargetKind
-    /// Safe to clean by default, or needs user review first.
+    /// Safe to clean by default or needs user review first.
     public let risk: MoleRisk
+    /// Explicit source-reviewed eligibility gate; unsupported targets are read-only.
+    public let eligibility: MoleEligibility
     /// True when removal needs elevated permissions.
     public let needsAdmin: Bool
     /// Why the data is rebuildable / what it is, in user-facing words.
@@ -140,7 +156,8 @@ public struct CleanTarget: Sendable, Equatable {
         group: MoleGroup,
         path: MolePath,
         kind: MoleTargetKind,
-        risk: MoleRisk = .safe,
+        risk: MoleRisk = .review,
+        eligibility: MoleEligibility = .unsupported,
         needsAdmin: Bool = false,
         explanation: String,
         processGuard: MoleProcessGuard? = nil,
@@ -153,12 +170,56 @@ public struct CleanTarget: Sendable, Equatable {
         self.path = path
         self.kind = kind
         self.risk = risk
+        self.eligibility = eligibility
         self.needsAdmin = needsAdmin
         self.explanation = explanation
         self.processGuard = processGuard
         self.pruneRule = pruneRule
         self.reportOnly = reportOnly
         self.source = source
+    }
+
+    /// Stable identity for manifests, scan provenance, and final rule reevaluation.
+    /// It depends only on rule-defining data, never on the current home or file system.
+    public var ruleID: String {
+        let pathIdentity: String
+        switch path {
+        case .homeRelative(let value): pathIdentity = "home:\(value)"
+        case .absolute(let value): pathIdentity = "absolute:\(value)"
+        }
+        let kindIdentity: String
+        switch kind {
+        case .directorySweep: kindIdentity = "directory-sweep"
+        case .directory: kindIdentity = "directory"
+        case .file: kindIdentity = "file"
+        case .glob: kindIdentity = "glob"
+        case .groupContainerLeaves: kindIdentity = "group-container-leaves"
+        case .frameworkVersions(let framework): kindIdentity = "framework-versions:\(framework)"
+        case .findRule(let maxDepth, let age, let filesOnly):
+            kindIdentity = "find:\(maxDepth.map(String.init) ?? "default"):\(age):\(filesOnly)"
+        }
+        let pruneIdentity: String
+        switch pruneRule {
+        case nil: pruneIdentity = "none"
+        case .keepCurrentSymlinkTarget: pruneIdentity = "keep-current-and-newer-staged"
+        case .keepInstalledOrNewerVersion: pruneIdentity = "keep-installed-or-newer"
+        case .staleNumberedSegments(let days): pruneIdentity = "stale-segments:\(days)"
+        case .keepNewest(let count): pruneIdentity = "keep-newest:\(count)"
+        }
+        let processIdentity = processGuard.map {
+            "\($0.family)|\($0.exactProcessNames.sorted().joined(separator: ","))|\($0.pathSubstrings.sorted().joined(separator: ","))"
+        } ?? "unguarded"
+        let sourceIdentity = source.range(of: #":[0-9]+$"#, options: .regularExpression)
+            .map { String(source[..<$0.lowerBound]) } ?? source
+        let components = [group.rawValue, label, pathIdentity, kindIdentity, pruneIdentity, processIdentity, sourceIdentity]
+        return "mole:" + components.map(Self.ruleIDComponent).joined(separator: ":")
+    }
+
+    private static func ruleIDComponent(_ value: String) -> String {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
+        if let encoded = value.addingPercentEncoding(withAllowedCharacters: allowed) { return encoded }
+        return Data(value.utf8).base64EncodedString().replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "=", with: "")
     }
 }
 

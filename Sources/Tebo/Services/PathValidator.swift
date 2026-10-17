@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 // MARK: - PathValidator
@@ -39,6 +40,31 @@ public struct FileIdentity: Sendable, Equatable, Hashable {
     }
 }
 
+/// A reviewed pathname binds its physical parent as well as its leaf inode.
+public struct PathBinding: Sendable, Equatable {
+    let leaf: FileIdentity
+    let parent: FileIdentity
+    let physicalParent: String
+    let byteCount: Int64
+    let modifiedSeconds: Int64
+    let modifiedNanoseconds: Int64
+    let changedSeconds: Int64
+    let changedNanoseconds: Int64
+
+    static func read(path: String) -> PathBinding? {
+        let parentURL = URL(fileURLWithPath: path).deletingLastPathComponent().resolvingSymlinksInPath()
+        var info = stat()
+        guard let leaf = FileIdentity.read(path: path),
+              let parent = FileIdentity.read(path: parentURL.path), lstat(path, &info) == 0,
+              leaf == FileIdentity(device: UInt64(bitPattern: Int64(info.st_dev)), inode: info.st_ino) else { return nil }
+        // Inode-only review missed in-place edits, including replacements with the same size.
+        return PathBinding(leaf: leaf, parent: parent, physicalParent: parentURL.path,
+            byteCount: info.st_size, modifiedSeconds: Int64(info.st_mtimespec.tv_sec),
+            modifiedNanoseconds: Int64(info.st_mtimespec.tv_nsec), changedSeconds: Int64(info.st_ctimespec.tv_sec),
+            changedNanoseconds: Int64(info.st_ctimespec.tv_nsec))
+    }
+}
+
 /// Full deletion-time validator. Static + Sendable; callable from any Task.
 public enum PathValidator {
 
@@ -55,6 +81,8 @@ public enum PathValidator {
         case whitelisted = "user whitelisted"
         case criticalSystemPath = "critical system path"
         case appleSystemFragment = "Apple system data fragment"
+        case protectedUserData = "mandatory user-data protection"
+        case dataContainerRoot = "whole application data container"
         case symlinkToProtectedPath = "symlink resolves to a protected path"
         case aliasOfProtectedRoot = "same inode as a protected root"
     }
@@ -103,13 +131,8 @@ public enum PathValidator {
             let expanded = (entry as NSString).expandingTildeInPath
             return expanded.hasPrefix("/") ? resolvedPhysicalPath(of: expanded) : entry
         })
-        if SafetyGate.rejectionReason(path: resolved, whitelist: whitelist.union(physicalWhitelist)) == .whitelisted {
-            return .whitelisted
-        }
-        if resolved != SafetyGate.normalized(path),
-           SafetyGate.isCriticalSystemPath(resolved)
-            || SafetyGate.containsAppleSystemFragment(resolved) {
-            return .symlinkToProtectedPath
+        if let reason = SafetyGate.rejectionReason(path: resolved, whitelist: whitelist.union(physicalWhitelist)) {
+            return reason == .whitelisted ? .whitelisted : .symlinkToProtectedPath
         }
 
         // 3. Same-inode guards for case-variant aliases (see list comments).
@@ -197,6 +220,8 @@ public enum PathValidator {
         case .whitelisted: return .whitelisted
         case .criticalSystemPath: return .criticalSystemPath
         case .appleSystemFragment: return .appleSystemFragment
+        case .protectedUserData: return .protectedUserData
+        case .dataContainerRoot: return .dataContainerRoot
         }
     }
 }

@@ -7,12 +7,18 @@ struct MolePurgeView: View {
     @AppStorage("filecleanup.purge.roots") private var savedRoots = ""
     var body: some View {
         let scanner = ProjectArtifactScanner(roots: roots)
-        let whitelist = appState.whitelist
-        ScanTab(tabID: "purge", title: "Project Cleanup", subtitle: "Build outputs and dependencies that can be rebuilt", icon: "hammer",
+        let cleanupRemovalValidator = CleanupRemovalValidator(projectRoots: roots)
+        ScanTab(tabID: "purge", title: "Project Cleanup", subtitle: "Project artifact folders, reviewed read-only for source and safety risks", icon: "hammer",
             scanScope: roots,
-            recommendedExplanation: "Only artifacts with no file activity in the last 7 days. Recent or unknown activity stays unticked.",
-            removalValidator: { await scanner.protectionReason(for: URL(fileURLWithPath: $0), whitelist: whitelist) },
+            recommendedExplanation: "Generic project artifacts remain read-only until tool-specific rebuildability is verified. Nothing is recommended.",
+            moleRemovalValidator: { row, whitelist in
+                await cleanupRemovalValidator.protectionReason(for: row, whitelist: whitelist)
+            },
             runScan: {
+                guard appState.refreshProtections() == nil else {
+                    appState.setScanNote("Project cleanup is blocked until protection settings are reloaded.", for: "purge")
+                    return []
+                }
                 let found = await scanner.scan(whitelist: appState.whitelist)
                 guard !Task.isCancelled else { return [] }
                 appState.advisoriesByTab["purge"] = found.kept
@@ -54,10 +60,18 @@ struct MoleInstallerView: View {
     @State private var customRoots: [String] = []
     @State private var kept: [AdvisoryRow] = []
     var body: some View {
+        let configuration = configuredInstallerConfiguration
+        let cleanupRemovalValidator = CleanupRemovalValidator(installerConfiguration: configuration)
         ScanTab(tabID: "installer", title: "Installers", subtitle: "Downloaded installers, with their size and source", icon: "arrow.down.app",
-            recommendedExplanation: "Installers older than 30 days. Recent downloads stay unticked.", runScan: {
-                var configuration = InstallerScanConfiguration.defaults()
-                if !customRoots.isEmpty { configuration.searchRoots = customRoots }
+            scanScope: configuration.searchRoots,
+            recommendedExplanation: "All installers need individual review. Age alone does not show whether you still need one.",
+            moleRemovalValidator: { row, whitelist in
+                await cleanupRemovalValidator.protectionReason(for: row, whitelist: whitelist)
+            }, runScan: {
+                guard appState.refreshProtections() == nil else {
+                    appState.setScanNote("Installer cleanup is blocked until protection settings are reloaded.", for: "installer")
+                    return []
+                }
                 let files = await InstallerFinder(configuration: configuration).findInstallers()
                 kept = files.filter { !SafetyGate.isAllowed(path: $0.path, whitelist: appState.whitelist) }.map {
                     .init(id: $0.path, title: $0.name, detail: "Protected by your whitelist or system rules", source: $0.path)
@@ -66,7 +80,8 @@ struct MoleInstallerView: View {
                 return files.map {
                     ScanResult(id: $0.id, path: $0.path, sizeBytes: $0.sizeBytes, category: $0.source,
                         reason: "\($0.kind.rawValue.uppercased()) installer",
-                        recommendedForSelection: ($0.age ?? 0) > 30 * 86_400)
+                        recommendedForSelection: false,
+                        cleanupSource: .installer)
                 }
             }, extraInfo: {
                 VStack(alignment: .leading, spacing: 10) {
@@ -82,6 +97,12 @@ struct MoleInstallerView: View {
                 }.teboCard()
             })
     }
+    private var configuredInstallerConfiguration: InstallerScanConfiguration {
+        var configuration = InstallerScanConfiguration.defaults()
+        if !customRoots.isEmpty { configuration.searchRoots = customRoots }
+        return configuration
+    }
+
     private func chooseRoots() {
         let picker = NSOpenPanel()
         picker.canChooseDirectories = true; picker.canChooseFiles = false; picker.allowsMultipleSelection = true
@@ -101,6 +122,10 @@ struct NativeAnalyzeView: View {
             scanScope: [root],
             rowsOverride: { AnyView(entries(allowed: $0)) }, rescanRequested: $requestScan,
             rendersEmptyRowsOverride: true, runScan: {
+                guard appState.refreshProtections() == nil else {
+                    appState.setScanNote("Analysis is blocked until protection settings are reloaded.", for: "analyze")
+                    return []
+                }
                 let found = await NativeDiskAnalyzer().analyze(root)
                 guard !Task.isCancelled else { return [] }
                 appState.folderAnalysis = found

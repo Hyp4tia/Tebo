@@ -290,6 +290,40 @@ struct InstallerFinderTests {
         #expect(!names.contains("Link.dmg"))
     }
 
+    @Test("A symlinked search root is not scanned")
+    func skipsSymlinkedSearchRoot() async throws {
+        let fixture = try Fixture(directoryName: "Downloads")
+        defer { fixture.tearDown() }
+        _ = try fixture.write(10, named: "valid.dmg")
+        let alias = fixture.cleanupURL.appendingPathComponent("Downloads-alias", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: fixture.root)
+        let finder = InstallerFinder(configuration: InstallerScanConfiguration(searchRoots: [alias.path]))
+
+        #expect(await finder.findInstallers().isEmpty)
+    }
+
+    @Test("Per-path rediscovery accepts only fresh local installer evidence")
+    func rediscoveryPolicy() async throws {
+        let fixture = try Fixture(directoryName: "Downloads")
+        defer { fixture.tearDown() }
+        let valid = try fixture.write(32, named: "valid.dmg")
+        let ordinary = try fixture.write(10, named: "notes.txt")
+        let external = try fixture.write(12, named: "external.dmg", relative: "outside")
+        let link = fixture.root.appendingPathComponent("linked.dmg")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: external)
+        let finder = fixture.finder()
+
+        #expect(await finder.removalProtectionReason(for: valid.path, whitelist: []) == nil)
+        #expect(await finder.removalProtectionReason(for: ordinary.path, whitelist: []) != nil)
+        #expect(await finder.removalProtectionReason(for: link.path, whitelist: []) != nil)
+        #expect(await finder.removalProtectionReason(
+            for: fixture.root.appendingPathComponent("missing.pkg").path, whitelist: []
+        ) != nil)
+        #expect(await finder.removalProtectionReason(
+            for: valid.path, whitelist: [fixture.root.path]
+        ) != nil)
+    }
+
     @Test("Zip inspection can be disabled")
     func zipInspectionToggle() async throws {
         let fixture = try Fixture(directoryName: "Downloads")

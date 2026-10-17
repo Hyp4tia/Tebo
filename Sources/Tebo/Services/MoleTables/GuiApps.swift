@@ -51,6 +51,9 @@ public enum GuiApps {
         explanation: String,
         processGuard: MoleProcessGuard? = nil,
         pruneRule: MolePruneRule? = nil,
+        risk: MoleRisk = .review,
+        eligibility: MoleEligibility = .unsupported,
+        reportOnly: Bool = false,
         source: String
     ) -> CleanTarget {
         CleanTarget(
@@ -58,9 +61,12 @@ public enum GuiApps {
             group: .guiApps,
             path: .homeRelative(path),
             kind: kind,
+            risk: risk,
+            eligibility: eligibility,
             explanation: explanation,
             processGuard: processGuard,
             pruneRule: pruneRule,
+            reportOnly: reportOnly,
             source: source
         )
     }
@@ -660,8 +666,9 @@ public enum GuiApps {
             "NeatDM stale downloads",
             "Library/Application Support/com.NeatDownloadManager",
             kind: .directorySweep,
-            explanation: "Numbered incomplete-download segment dirs whose seg.x0 is older than 30 days (their URLs have long expired). The history database is never touched.",
+            explanation: "Numbered incomplete-download segments with a seg.x0 marker older than 30 days. They may contain downloads you still need. Manual review only; the history database is kept.",
             pruneRule: .staleNumberedSegments(minAgeDays: 30),
+            eligibility: .manualReview,
             source: "mole lib/clean/app_caches.sh:1871"
         ),
 

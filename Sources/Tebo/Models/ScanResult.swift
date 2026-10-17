@@ -1,5 +1,14 @@
 import Foundation
 
+/// The producing rule is required to recheck Mole cleanup eligibility at removal.
+public enum CleanupSource: Hashable, Sendable, Codable {
+    case moleRule(String)
+    case orphanCache(String)
+    case installer
+    case projectArtifact
+    case maintenance(String)
+}
+
 // MARK: - ScanResult
 // One file/folder the engine thinks we can clean.
 // Kept tiny on purpose: UI only needs path + size + reason.
@@ -14,10 +23,11 @@ public struct ScanResult: Identifiable, Hashable, Sendable, Codable {
     public let reason: String     // Why it is safe, shown in UI
     public let isSizeComplete: Bool
     /// True when the scanner that produced this row also knows a rule that makes it a safe
-    /// default choice (Mole's "safe" risk tier, a duplicate copy beyond the first per group, the
-    /// largest files, a stale installer). "Select recommended" ticks exactly these rows and
+    /// default choice. Age or a familiar folder name alone does not prove disposability.
+    /// "Select recommended" ticks exactly these rows and
     /// nothing else; no rule is invented at display time.
     public let recommendedForSelection: Bool
+    public let cleanupSource: CleanupSource?
 
     public init(
         id: UUID = UUID(),
@@ -26,7 +36,8 @@ public struct ScanResult: Identifiable, Hashable, Sendable, Codable {
         category: String,
         reason: String,
         recommendedForSelection: Bool = false,
-        isSizeComplete: Bool = true
+        isSizeComplete: Bool = true,
+        cleanupSource: CleanupSource? = nil
     ) {
         self.id = id
         self.path = path
@@ -35,6 +46,7 @@ public struct ScanResult: Identifiable, Hashable, Sendable, Codable {
         self.reason = reason
         self.recommendedForSelection = recommendedForSelection
         self.isSizeComplete = isSizeComplete
+        self.cleanupSource = cleanupSource
     }
 
     /// Human-readable size, e.g. "1.2 GB". Cached formatter = fast.

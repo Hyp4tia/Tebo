@@ -14,14 +14,20 @@ public enum AppCaches {
         _ path: String,
         kind: MoleTargetKind,
         explanation: String,
-        source: String
+        source: String,
+        risk: MoleRisk = .review,
+        eligibility: MoleEligibility = .unsupported,
+        reportOnly: Bool = false
     ) -> CleanTarget {
         CleanTarget(
             label: label,
             group: .appCaches,
             path: .homeRelative(path),
             kind: kind,
+            risk: risk,
+            eligibility: eligibility,
             explanation: explanation,
+            reportOnly: reportOnly,
             source: source
         )
     }
@@ -31,9 +37,10 @@ public enum AppCaches {
         target(
             "Saved application states",
             "Library/Saved Application State",
-            kind: .directorySweep,
-            explanation: "Window restore snapshots written by apps on quit. macOS rebuilds them on next launch.",
-            source: "mole lib/clean/user.sh:959"
+            kind: .findRule(maxDepth: 1, minAgeMinutes: 30 * 24 * 60, filesOnly: false),
+            explanation: "Only saved-state entries untouched for at least 30 days are listed; recent app restore state stays in place.",
+            source: "mole lib/clean/user.sh:959",
+            risk: .review
         ),
         target(
             "Photo analysis cache",
@@ -278,11 +285,14 @@ public enum AppCaches {
             source: "mole lib/clean/user.sh:1010"
         ),
         target(
-            "Group Containers logs/caches",
-            "Library/Group Containers/*",
-            kind: .glob,
-            explanation: "Per shared container: Logs and Library/Logs always; tmp, Library/tmp, Caches and Library/Caches only when the owning app is not protected. Apple-owned and Safari-extension containers are skipped entirely.",
-            source: "mole lib/clean/user.sh:1221"
+            "Group Containers cache and log leaves",
+            "Library/Group Containers",
+            kind: .groupContainerLeaves,
+            explanation: "Only direct regular files under user-owned Caches/Logs subdirectories are exposed. Container roots, Documents, tmp, nested cache folders, Apple-owned containers and Safari extension containers are retained.",
+            source: "mole lib/clean/user.sh:1221",
+            risk: .review,
+            eligibility: .manualReview,
+            reportOnly: false
         ),
 
         // -- Handoff / Universal Clipboard ----------------------------------------

@@ -8,15 +8,13 @@ import Foundation
 // here feeds a delete path - the app's DeletePipeline is the only place
 // files may be removed.
 //
-// Verdicts are deliberately conservative, matching Mole's own surface:
-// - Only reverse-DNS bundle ids (com./org./net./io. children, apps.sh:779-782)
-//   are ever classified as orphans, and only after a negative bundle lookup.
-// - LaunchAgents need a bundle-id label PLUS a missing absolute Program
-//   path (AGENTS.md: parse plist Program/ProgramArguments values as
-//   absolute paths only).
-// - Every name that could be a system component, a security tool, or a
-//   command-line tool is kept with a reason (AGENTS.md: leftover matching
-//   stays exact; no generic-name or wildcard fallbacks).
+// Verdicts are deliberately conservative:
+// - Only reverse-DNS cache owners in the explicit rebuildable-owner policy
+//   can be considered, and only after a complete negative ownership lookup.
+// - Application Support, Preferences and LaunchAgents remain read-only user
+//   state; missing app ownership never makes them disposable.
+// - Every system, security-sensitive, unsupported CLI, protected or unknown
+//   owner is kept; no generic-name or wildcard cache fallback exists.
 
 // MARK: Models
 
@@ -122,6 +120,10 @@ public struct OrphanScanConfiguration: Sendable, Equatable {
     /// ORPHAN_AGE_THRESHOLD): anything modified inside this window is
     /// kept. Seconds; 0 disables the gate (fixture mode).
     public var minimumOrphanAge: TimeInterval
+    /// Exact bundle IDs whose cache-only disposable semantics have been
+    /// explicitly reviewed. Empty by default: a missing app alone is not
+    /// evidence that user data is disposable.
+    public var rebuildableCacheBundleIDs: Set<String>
     /// Row cap per verdict list, like the app's other scan caps.
     public var maximumRowsPerVerdict: Int
     /// Entry budget for recursive size measurement of a confirmed orphan
@@ -137,6 +139,7 @@ public struct OrphanScanConfiguration: Sendable, Equatable {
         launchAgentRoots: [String],
         applicationRoots: [String],
         minimumOrphanAge: TimeInterval = 30 * 24 * 60 * 60,
+        rebuildableCacheBundleIDs: Set<String> = [],
         maximumRowsPerVerdict: Int = 500,
         sizeWalkEntryBudget: Int = 200_000
     ) {
@@ -146,6 +149,7 @@ public struct OrphanScanConfiguration: Sendable, Equatable {
         self.launchAgentRoots = launchAgentRoots
         self.applicationRoots = applicationRoots
         self.minimumOrphanAge = minimumOrphanAge
+        self.rebuildableCacheBundleIDs = Set(rebuildableCacheBundleIDs.map { $0.lowercased() })
         self.maximumRowsPerVerdict = maximumRowsPerVerdict
         self.sizeWalkEntryBudget = sizeWalkEntryBudget
     }
@@ -183,10 +187,19 @@ public enum BundleLookupResult: Sendable, Equatable {
 /// answers unknown, to pin the fail-closed behaviour).
 public protocol BundleLookup: Sendable {
     func isInstalled(bundleID: String) async -> BundleLookupResult
+    /// Bypasses memoized negative results and refreshes the configured app inventory.
+    func isInstalledFresh(bundleID: String) async -> BundleLookupResult
+}
+
+public extension BundleLookup {
+    func isInstalledFresh(bundleID: String) async -> BundleLookupResult {
+        // A lookup that cannot refresh its state is not evidence of absence.
+        .unknown
+    }
 }
 
 /// Default lookup: an installed-bundle scan over the app roots plus Mole's
-/// mdfind fallback for apps installed elsewhere (apps.sh:495-522).
+/// mdfind fallback for ids the roots do not contain (apps.sh:495-522).
 public struct InstalledAppsBundleLookup: BundleLookup {
     private let cache: BundleIDCache
 
@@ -202,15 +215,16 @@ public struct InstalledAppsBundleLookup: BundleLookup {
     public func isInstalled(bundleID: String) async -> BundleLookupResult {
         await cache.lookup(bundleID)
     }
+
+    public func isInstalledFresh(bundleID: String) async -> BundleLookupResult {
+        await cache.lookupFresh(bundleID)
+    }
 }
 
-/// Memoized bundle-id resolver. Only installed/notInstalled outcomes are
-/// cached: a probe failure is unknown and must NOT be cached, or a
-/// transient Spotlight stall would mark a live app as missing for the rest
-/// of the process (Mole's poison-the-cache rule, apps.sh:503-507).
+/// Memoized discovery lookup plus an explicit fresh lookup for final policy checks.
 actor BundleIDCache {
     private var results: [String: BundleLookupResult] = [:]
-    private var rootBundleIDs: Set<String>?
+    private var rootIndex: InstalledAppIndex?
     private let appRoots: [String]
     private let useSpotlight: Bool
 
@@ -220,46 +234,63 @@ actor BundleIDCache {
     }
 
     func lookup(_ bundleID: String) async -> BundleLookupResult {
-        // Bundle ids are case-PRESERVING but not case-SENSITIVE for the
-        // paths apps write (Mole lib/uninstall/batch.sh:657-667).
         let key = bundleID.lowercased()
         if let cached = results[key] { return cached }
-        if rootBundleIDs == nil {
-            rootBundleIDs = InstalledAppIndex.build(from: appRoots).bundleIDs
-        }
-        if rootBundleIDs?.contains(key) == true {
+        let index = rootIndex ?? InstalledAppIndex.build(from: appRoots)
+        rootIndex = index
+        if index.bundleIDs.contains(key) {
             results[key] = .installed
             return .installed
         }
-        guard useSpotlight else {
-            // Fixture/test mode without Spotlight: absence from the
-            // scanned roots is meaningful because the caller owns those
-            // roots (a real scan keeps the Spotlight fallback on).
-            results[key] = .notInstalled
-            return .notInstalled
+        let result: BundleLookupResult
+        if useSpotlight {
+            let spotlight = await spotlightLookup(bundleID: bundleID)
+            result = spotlight == .notInstalled && !index.isComplete ? .unknown : spotlight
+        } else {
+            result = index.isComplete ? .notInstalled : .unknown
         }
-        let spotlight = await spotlightLookup(bundleID: bundleID)
-        if spotlight != .unknown { results[key] = spotlight }
-        return spotlight
+        if result != .unknown { results[key] = result }
+        return result
     }
 
-    /// Mole's mdfind probe (apps.sh:510): absolute path, bounded by
-    /// MOLE_TIMEOUT_MEDIUM_PROBE_SEC (5s). Empty output = not installed;
-    /// any timeout or error = unknown, which callers keep. Runs through
-    /// BoundedProcessRunner, so a hung mdfind is SIGTERM'd at the deadline
-    /// and SIGKILL'd 2s later; the await can never block past that.
+    /// Always rebuild the configured installed-app index and never reuse a
+    /// negative Spotlight result. A new app installed after preview therefore
+    /// cannot be hidden by the scan-time absence cache.
+    func lookupFresh(_ bundleID: String) async -> BundleLookupResult {
+        let index = InstalledAppIndex.build(from: appRoots)
+        if index.bundleIDs.contains(bundleID.lowercased()) { return .installed }
+        if useSpotlight {
+            let spotlight = await spotlightLookup(bundleID: bundleID)
+            if spotlight == .installed { return .installed }
+            guard index.isComplete else { return .unknown }
+            return spotlight
+        }
+        return index.isComplete ? .notInstalled : .unknown
+    }
+
+    /// Mole's mdfind probe (apps.sh:510): empty output is useful only on a
+    /// successful, untruncated process. Timeout, error or truncated output is
+    /// unknown, never evidence of absence.
     private func spotlightLookup(bundleID: String) async -> BundleLookupResult {
         let result = await BoundedProcessRunner.run(
             executablePath: "/usr/bin/mdfind",
             arguments: ["kMDItemCFBundleIdentifier == '\(bundleID)'"],
             timeout: 5
         )
-        guard let status = result.terminationStatus else { return .unknown }
-        // Watchdog kills surface as terminationStatus 9 (SIGKILL) or 15
-        // (SIGTERM); any non-zero status is a probe failure, never an
-        // "installed" answer.
-        guard status == 0 else { return .unknown }
-        let trimmed = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return InstalledAppsBundleLookup.spotlightResult(
+            terminationStatus: result.terminationStatus,
+            stdout: result.stdout,
+            outputTruncated: result.outputTruncated
+        )
+    }
+}
+
+extension InstalledAppsBundleLookup {
+    static func spotlightResult(
+        terminationStatus: Int32?, stdout: String, outputTruncated: Bool
+    ) -> BundleLookupResult {
+        guard terminationStatus == 0, !outputTruncated else { return .unknown }
+        let trimmed = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? .notInstalled : .installed
     }
 }
@@ -274,51 +305,122 @@ struct InstalledAppIndex: Sendable, Equatable {
     let bundleIDs: Set<String>
     /// Lowercased name variant -> display name of the owning app.
     let variantOwners: [String: String]
+    /// False when any configured root or app identity could not be fully read.
+    let isComplete: Bool
 
     static func build(from roots: [String]) -> InstalledAppIndex {
         var bundleIDs: Set<String> = []
         var variantOwners: [String: String] = [:]
+        var complete = !roots.isEmpty
         let fm = FileManager.default
+        let deadline = Date.now.addingTimeInterval(8)
+        var remainingEntries = 100_000
+
         for root in roots {
-            guard let children = try? fm.contentsOfDirectory(
-                at: URL(fileURLWithPath: root, isDirectory: true),
-                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
-                options: []
-            ) else { continue }
-            for child in children {
-                guard child.pathExtension.lowercased() == "app" else { continue }
-                // Resolve symlinks: a symlinked bundle in ~/Applications is
-                // still an installed app and its data must be kept.
-                let bundleURL = child.resolvingSymlinksInPath()
-                var isDir: ObjCBool = false
-                guard fm.fileExists(atPath: bundleURL.path, isDirectory: &isDir),
-                      isDir.boolValue else { continue }
-                let info = readBundleInfo(at: bundleURL.path)
-                let folderName = bundleURL.deletingPathExtension().lastPathComponent
-                var names: [String] = [folderName]
-                if let id = info.bundleID {
-                    bundleIDs.insert(id.lowercased())
-                    if let leaf = id.split(separator: ".").last {
-                        names.append(String(leaf))
-                    }
+            guard !Task.isCancelled, Date.now < deadline else {
+                complete = false
+                break
+            }
+            let rootURL = URL(fileURLWithPath: root, isDirectory: true)
+            var rootIsDirectory: ObjCBool = false
+            guard fm.fileExists(atPath: rootURL.path, isDirectory: &rootIsDirectory) else {
+                if !confirmedMissingRoot(rootURL, fileManager: fm) { complete = false }
+                continue
+            }
+            guard rootIsDirectory.boolValue,
+                  let rootValues = try? rootURL.resourceValues(forKeys: [.isSymbolicLinkKey, .volumeIsLocalKey]),
+                  rootValues.isSymbolicLink != true,
+                  rootValues.volumeIsLocal == true else {
+                complete = false
+                continue
+            }
+
+            var pending: [(url: URL, depth: Int)] = [(rootURL, 0)]
+            while let (directory, depth) = pending.popLast() {
+                guard !Task.isCancelled, Date.now < deadline, remainingEntries > 0 else {
+                    complete = false
+                    break
                 }
-                if let name = info.name { names.append(name) }
-                if let displayName = info.displayName { names.append(displayName) }
-                if let executable = info.executable { names.append(executable) }
-                let display = info.displayName ?? info.name ?? folderName
-                for candidate in names where !candidate.isEmpty {
-                    for variant in nameVariants(of: candidate) where !variant.isEmpty {
-                        // First app to claim a variant wins; collisions are
-                        // rare and either owner keeps the entry, which is
-                        // the safe direction.
-                        if variantOwners[variant] == nil {
-                            variantOwners[variant] = display
+                guard let children = try? fm.contentsOfDirectory(
+                    at: directory,
+                    includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .volumeIsLocalKey],
+                    options: []
+                ) else {
+                    complete = false
+                    continue
+                }
+                for child in children {
+                    remainingEntries -= 1
+                    guard remainingEntries >= 0,
+                          let values = try? child.resourceValues(
+                            forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .volumeIsLocalKey]
+                          ) else {
+                        complete = false
+                        continue
+                    }
+                    guard values.volumeIsLocal == true else {
+                        complete = false
+                        continue
+                    }
+                    let isBundle = child.pathExtension.lowercased() == "app"
+                    if values.isSymbolicLink == true {
+                        guard isBundle else { complete = false; continue }
+                        let resolved = child.resolvingSymlinksInPath()
+                        guard let info = readBundleInfo(at: resolved.path),
+                              let id = info.bundleID, !id.isEmpty else {
+                            complete = false
+                            continue
                         }
+                        record(info, folderName: resolved.deletingPathExtension().lastPathComponent,
+                               bundleID: id, bundleIDs: &bundleIDs, variantOwners: &variantOwners)
+                        continue
+                    }
+                    guard values.isDirectory == true else { continue }
+                    if isBundle {
+                        guard let info = readBundleInfo(at: child.path),
+                              let id = info.bundleID, !id.isEmpty else {
+                            complete = false
+                            continue
+                        }
+                        record(info, folderName: child.deletingPathExtension().lastPathComponent,
+                               bundleID: id, bundleIDs: &bundleIDs, variantOwners: &variantOwners)
+                    } else if depth < 64 {
+                        pending.append((child, depth + 1))
+                    } else {
+                        complete = false
                     }
                 }
             }
         }
-        return InstalledAppIndex(bundleIDs: bundleIDs, variantOwners: variantOwners)
+        return InstalledAppIndex(bundleIDs: bundleIDs, variantOwners: variantOwners, isComplete: complete)
+    }
+
+    private static func record(
+        _ info: BundleInfo,
+        folderName: String,
+        bundleID: String,
+        bundleIDs: inout Set<String>,
+        variantOwners: inout [String: String]
+    ) {
+        bundleIDs.insert(bundleID.lowercased())
+        var names: [String] = [folderName]
+        if let leaf = bundleID.split(separator: ".").last { names.append(String(leaf)) }
+        if let name = info.name { names.append(name) }
+        if let displayName = info.displayName { names.append(displayName) }
+        if let executable = info.executable { names.append(executable) }
+        let display = info.displayName ?? info.name ?? folderName
+        for candidate in names where !candidate.isEmpty {
+            for variant in nameVariants(of: candidate) where !variant.isEmpty {
+                if variantOwners[variant] == nil { variantOwners[variant] = display }
+            }
+        }
+    }
+
+    private static func confirmedMissingRoot(_ root: URL, fileManager: FileManager) -> Bool {
+        let parent = root.deletingLastPathComponent()
+        guard fileManager.fileExists(atPath: parent.path),
+              let children = try? fileManager.contentsOfDirectory(atPath: parent.path) else { return false }
+        return !children.contains(root.lastPathComponent)
     }
 
     /// The installed app whose naming variants match childName, or nil.
@@ -353,13 +455,11 @@ struct InstalledAppIndex: Sendable, Equatable {
         return out
     }
 
-    private static func readBundleInfo(at appPath: String) -> BundleInfo {
+    private static func readBundleInfo(at appPath: String) -> BundleInfo? {
         let plistPath = (appPath as NSString).appendingPathComponent("Contents/Info.plist")
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: plistPath)),
               let plist = try? PropertyListSerialization.propertyList(from: data, format: nil)
-                as? [String: Any] else {
-            return BundleInfo(bundleID: nil, name: nil, displayName: nil, executable: nil)
-        }
+                as? [String: Any] else { return nil }
         return BundleInfo(
             bundleID: plist["CFBundleIdentifier"] as? String,
             name: plist["CFBundleName"] as? String,
@@ -374,6 +474,12 @@ struct BundleInfo {
     let name: String?
     let displayName: String?
     let executable: String?
+}
+
+struct CacheTreeInspection {
+    let sizeBytes: Int64
+    let newestModification: Date?
+    let protectionReason: String?
 }
 
 // MARK: Scanner
@@ -397,11 +503,11 @@ public struct OrphanScanner: Sendable {
         /// Why it looks orphaned plus its mtime; the row is built after
         /// sizing so big trees are only measured once a candidate is
         /// confirmed (Mole sizes after the orphan check, apps.sh:851).
-        case orphan(reason: String, lastModified: Date?)
+        case orphan(reason: String, lastModified: Date?, tree: CacheTreeInspection?)
         case keep(OrphanKeptRow)
     }
 
-    public func scan() async -> OrphanScanReport {
+    public func scan(whitelist: Set<String> = []) async -> OrphanScanReport {
         var orphans: [OrphanRow] = []
         var kept: [OrphanKeptRow] = []
         let index = InstalledAppIndex.build(from: configuration.applicationRoots)
@@ -421,20 +527,27 @@ public struct OrphanScanner: Sendable {
             isDirectory: Bool
         ) {
             switch verdict {
-            case .orphan(let reason, let lastModified):
+            case .orphan(let reason, let lastModified, let tree):
                 guard orphans.count < cap else { return }
                 if isDirectory {
-                    // A cut-short walk reports its lower bound with
-                    // isSizeComplete=false so the UI can say "unavailable"
-                    // instead of presenting a wrong exact number.
-                    let measured = Self.recursiveSize(
-                        at: path, entryBudget: configuration.sizeWalkEntryBudget
-                    )
-                    guard measured.bytes > 0 || !measured.complete else { return }
+                    let sizeBytes: Int64
+                    let isComplete: Bool
+                    if let tree {
+                        sizeBytes = tree.sizeBytes
+                        isComplete = true
+                    } else {
+                        let measured = Self.recursiveSize(
+                            at: path, entryBudget: configuration.sizeWalkEntryBudget
+                        )
+                        sizeBytes = measured.bytes
+                        isComplete = measured.complete
+                    }
+                    guard sizeBytes > 0 else { return }
                     orphans.append(OrphanRow(
-                        name: name, path: path, sizeBytes: measured.bytes,
-                        isSizeComplete: measured.complete,
-                        lastModified: lastModified, category: category, reason: reason
+                        name: name, path: path, sizeBytes: sizeBytes,
+                        isSizeComplete: isComplete,
+                        lastModified: tree?.newestModification ?? lastModified,
+                        category: category, reason: reason
                     ))
                 } else {
                     // Zero-size leftovers are skipped like Mole's size gate
@@ -450,8 +563,8 @@ public struct OrphanScanner: Sendable {
             }
         }
 
-        // Application Support + Caches: every direct child is a candidate
-        // (Mole's leftover locations, app_protection.sh:1016-1018).
+        // Application Support is surfaced as read-only personal data; only
+        // explicitly supported direct Caches children can reach orphan policy.
         let directoryCategories: [([String], OrphanCategory)] = [
             (configuration.applicationSupportRoots, .applicationSupport),
             (configuration.cacheRoots, .caches),
@@ -462,17 +575,47 @@ public struct OrphanScanner: Sendable {
                 guard let children = Self.directChildren(of: root) else { continue }
                 for child in children {
                     if Task.isCancelled || (orphans.count >= cap && kept.count >= cap) { break }
-                    // Dot-prefixed children are XDG/CLI-style state; Mole
-                    // keeps those off blanket cleanup paths by design.
-                    if child.name.hasPrefix(".") { continue }
-                    let verdict = await classify(
-                        name: child.name,
-                        evidenceName: child.name,
-                        path: child.url.path,
-                        lastModified: child.modified,
-                        index: index,
-                        now: now
-                    )
+                    if let reason = child.protectionReason {
+                        collect(
+                            .keep(OrphanKeptRow(name: child.name, path: child.url.path, reason: reason)),
+                            name: child.name, path: child.url.path, category: category,
+                            fileSize: child.sizeBytes, isDirectory: child.isDirectory
+                        )
+                        continue
+                    }
+                    if child.name.hasPrefix(".") {
+                        collect(
+                            .keep(OrphanKeptRow(name: child.name, path: child.url.path,
+                                reason: "Dot-prefixed user and command-line state is kept")),
+                            name: child.name, path: child.url.path, category: category,
+                            fileSize: child.sizeBytes, isDirectory: child.isDirectory
+                        )
+                        continue
+                    }
+                    let verdict: OrphanVerdict
+                    if category == .caches {
+                        if !child.isDirectory {
+                            verdict = .keep(OrphanKeptRow(
+                                name: child.name, path: child.url.path,
+                                reason: "Cache candidate is not a directory; kept"
+                            ))
+                        } else {
+                            verdict = await classify(
+                                name: child.name,
+                                evidenceName: child.name,
+                                path: child.url.path,
+                                whitelist: whitelist,
+                                lastModified: child.modified,
+                                index: index,
+                                now: now
+                            )
+                        }
+                    } else {
+                        verdict = .keep(OrphanKeptRow(
+                            name: child.name, path: child.url.path,
+                            reason: "Application Support is personal app data and remains read-only"
+                        ))
+                    }
                     collect(
                         verdict,
                         name: child.name,
@@ -493,17 +636,21 @@ public struct OrphanScanner: Sendable {
             guard let children = Self.directChildren(of: root) else { continue }
             for child in children {
                 if Task.isCancelled || (orphans.count >= cap && kept.count >= cap) { break }
+                if let reason = child.protectionReason {
+                    collect(
+                        .keep(OrphanKeptRow(name: child.name, path: child.url.path, reason: reason)),
+                        name: child.name, path: child.url.path, category: .preferences,
+                        fileSize: child.sizeBytes, isDirectory: child.isDirectory
+                    )
+                    continue
+                }
                 guard !child.isDirectory, child.name.hasSuffix(".plist") else { continue }
                 let stem = (child.name as NSString).deletingPathExtension
                 guard !stem.isEmpty else { continue }
-                let verdict = await classify(
-                    name: child.name,
-                    evidenceName: stem,
-                    path: child.url.path,
-                    lastModified: child.modified,
-                    index: index,
-                    now: now
-                )
+                let verdict = OrphanVerdict.keep(OrphanKeptRow(
+                    name: child.name, path: child.url.path,
+                    reason: "Preferences are personal user state and remain read-only"
+                ))
                 collect(
                     verdict,
                     name: child.name,
@@ -515,14 +662,26 @@ public struct OrphanScanner: Sendable {
             }
         }
 
-        // LaunchAgents: plist content decides (see classifyLaunchAgent).
+        // LaunchAgents: user-owned automation remains read-only regardless of
+        // whether its current label or Program target appears installed.
         for root in configuration.launchAgentRoots {
             guard !Task.isCancelled else { break }
             guard let children = Self.directChildren(of: root) else { continue }
             for child in children {
                 if Task.isCancelled || (orphans.count >= cap && kept.count >= cap) { break }
+                if let reason = child.protectionReason {
+                    collect(
+                        .keep(OrphanKeptRow(name: child.name, path: child.url.path, reason: reason)),
+                        name: child.name, path: child.url.path, category: .launchAgent,
+                        fileSize: child.sizeBytes, isDirectory: child.isDirectory
+                    )
+                    continue
+                }
                 guard !child.isDirectory, child.name.hasSuffix(".plist") else { continue }
-                let verdict = await classifyLaunchAgent(url: child.url, index: index, now: now)
+                let verdict = OrphanVerdict.keep(OrphanKeptRow(
+                    name: child.name, path: child.url.path,
+                    reason: "LaunchAgents are user-owned automation and remain read-only"
+                ))
                 collect(
                     verdict,
                     name: child.name,
@@ -548,6 +707,7 @@ public struct OrphanScanner: Sendable {
         name: String,
         evidenceName: String,
         path: String,
+        whitelist: Set<String>,
         lastModified: Date?,
         index: InstalledAppIndex,
         now: Date
@@ -561,8 +721,27 @@ public struct OrphanScanner: Sendable {
         if Self.isSensitiveName(evidenceName) {
             return .keep(OrphanKeptRow(
                 name: name, path: path,
-                reason: "Security-sensitive name; Mole never orphans it (apps.sh:410-420)"
+                reason: "Security-sensitive name; never treated as disposable cache data"
             ))
+        }
+        if !SafetyGate.isAllowed(path: path, whitelist: whitelist) {
+            return .keep(OrphanKeptRow(name: name, path: path,
+                reason: "SafetyGate or user whitelist protects this cache path"))
+        }
+        if !Self.isBundleIDCandidate(evidenceName)
+            || !configuration.rebuildableCacheBundleIDs.contains(evidenceName.lowercased()) {
+            return .keep(OrphanKeptRow(
+                name: name, path: path,
+                reason: "No explicit supported cache-owner policy; kept"
+            ))
+        }
+        guard index.isComplete else {
+            return .keep(OrphanKeptRow(name: name, path: path,
+                reason: "Installed-app inventory is incomplete; kept"))
+        }
+        if index.bundleIDs.contains(evidenceName.lowercased()) {
+            return .keep(OrphanKeptRow(name: name, path: path,
+                reason: "Owned by an installed app (\(evidenceName))"))
         }
         if let lastModified, now.timeIntervalSince(lastModified) < configuration.minimumOrphanAge {
             return .keep(OrphanKeptRow(
@@ -586,9 +765,24 @@ public struct OrphanScanner: Sendable {
                     reason: "Bundle lookup unavailable; kept"
                 ))
             case .notInstalled:
+                let tree = Self.inspectCacheTree(
+                    at: path,
+                    entryBudget: configuration.sizeWalkEntryBudget,
+                    minimumAge: configuration.minimumOrphanAge,
+                    whitelist: whitelist,
+                    now: now
+                )
+                if let reason = tree.protectionReason {
+                    return .keep(OrphanKeptRow(name: name, path: path, reason: reason))
+                }
+                guard tree.newestModification != nil, tree.sizeBytes > 0 else {
+                    return .keep(OrphanKeptRow(name: name, path: path,
+                        reason: "Cache tree has no complete, positive-size evidence; kept"))
+                }
                 return .orphan(
-                    reason: "No installed app owns bundle id \(evidenceName)",
-                    lastModified: lastModified
+                    reason: "Supported cache owner is absent and the complete tree is outside the retention window",
+                    lastModified: tree.newestModification,
+                    tree: tree
                 )
             }
         }
@@ -609,91 +803,133 @@ public struct OrphanScanner: Sendable {
         ))
     }
 
-    /// LaunchAgent verdict. Mole treats a plist and its Program helper as
-    /// one family (AGENTS.md): the plist is only an orphan when its label
-    /// is a bundle id with no installed app AND its absolute program path
-    /// is gone AND the age gate passes. Everything else is kept with a
-    /// reason.
-    private func classifyLaunchAgent(
-        url: URL,
-        index: InstalledAppIndex,
+    private static func inspectCacheTree(
+        at path: String,
+        entryBudget: Int,
+        minimumAge: TimeInterval,
+        whitelist: Set<String>,
         now: Date
-    ) async -> OrphanVerdict {
-        let name = url.lastPathComponent
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
-        let lastModified = values?.contentModificationDate
+    ) -> CacheTreeInspection {
+        func rejected(_ reason: String, newest: Date? = nil, bytes: Int64 = 0) -> CacheTreeInspection {
+            CacheTreeInspection(sizeBytes: bytes, newestModification: newest, protectionReason: reason)
+        }
+        let root = URL(fileURLWithPath: path, isDirectory: true)
+        let keys: Set<URLResourceKey> = [
+            .isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey,
+            .fileSizeKey, .contentModificationDateKey, .volumeIsLocalKey,
+            .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey,
+        ]
+        var pending = [root]
+        var newest: Date?
+        var bytes: Int64 = 0
+        var entries = 0
+        let deadline = now.addingTimeInterval(30)
 
-        guard let data = try? Data(contentsOf: url),
-              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil)
-                as? [String: Any] else {
-            return .keep(OrphanKeptRow(name: name, path: url.path, reason: "Agent plist unreadable; kept"))
+        while let entry = pending.popLast() {
+            guard !Task.isCancelled, Date.now < deadline, entries < entryBudget else {
+                return rejected("Cache tree traversal is incomplete; kept", newest: newest, bytes: bytes)
+            }
+            entries += 1
+            guard SafetyGate.isAllowed(path: entry.path, whitelist: whitelist),
+                  let values = try? entry.resourceValues(forKeys: keys) else {
+                return rejected("SafetyGate protection or missing cache-tree metadata; kept",
+                                newest: newest, bytes: bytes)
+            }
+            guard values.isSymbolicLink != true else {
+                return rejected("Cache tree contains a symlink; kept", newest: newest, bytes: bytes)
+            }
+            guard values.volumeIsLocal == true else {
+                return rejected("Cache tree contains non-local or unknown-volume data; kept",
+                                newest: newest, bytes: bytes)
+            }
+            guard values.isUbiquitousItem != true,
+                  values.ubiquitousItemDownloadingStatus == nil else {
+                return rejected("Cache tree contains cloud-backed data; kept", newest: newest, bytes: bytes)
+            }
+            guard let modified = values.contentModificationDate else {
+                return rejected("Cache tree modification metadata is unknown; kept", newest: newest, bytes: bytes)
+            }
+            newest = max(newest ?? modified, modified)
+            guard now.timeIntervalSince(modified) >= minimumAge else {
+                return rejected("A cache-tree descendant is inside the retention window; kept",
+                                newest: newest, bytes: bytes)
+            }
+            if values.isDirectory == true {
+                guard let children = try? FileManager.default.contentsOfDirectory(
+                    at: entry, includingPropertiesForKeys: Array(keys), options: []
+                ) else {
+                    return rejected("Cache tree contains an unreadable directory; kept",
+                                    newest: newest, bytes: bytes)
+                }
+                pending.append(contentsOf: children)
+            } else if values.isRegularFile == true, let size = values.fileSize, size >= 0 {
+                let (updatedBytes, overflow) = bytes.addingReportingOverflow(Int64(size))
+                guard !overflow else {
+                    return rejected("Cache tree size exceeded measurable bounds; kept",
+                                    newest: newest, bytes: bytes)
+                }
+                bytes = updatedBytes
+            } else {
+                return rejected("Cache tree contains a non-regular or unmeasurable entry; kept",
+                                newest: newest, bytes: bytes)
+            }
         }
-        guard let label = plist["Label"] as? String else {
-            return .keep(OrphanKeptRow(name: name, path: url.path, reason: "Agent plist has no Label; kept"))
+        guard entries > 0 else { return rejected("Cache tree evidence is unavailable; kept") }
+        return CacheTreeInspection(sizeBytes: bytes, newestModification: newest, protectionReason: nil)
+    }
+
+    /// Re-evaluates an exact direct cache child against current configuration,
+    /// installed inventory, Spotlight and every descendant. nil means only that
+    /// this narrow discovery policy still holds, not that removal is authorized.
+    public func removalProtectionReason(for path: String, whitelist: Set<String>) async -> String? {
+        guard SafetyGate.isAllowed(path: path, whitelist: whitelist) else {
+            return "SafetyGate or user whitelist protects this cache path"
         }
-        if Self.isAppleSystemName(label) {
-            return .keep(OrphanKeptRow(
-                name: name, path: url.path,
-                reason: "Apple system agent; never offered as a leftover"
-            ))
+        let candidate = URL(fileURLWithPath: path).standardizedFileURL
+        let candidateParent = candidate.deletingLastPathComponent().standardizedFileURL.path
+        let configuredRoot = configuration.cacheRoots.first { root in
+            let rootURL = URL(fileURLWithPath: root, isDirectory: true).standardizedFileURL
+            let lexicalPath = rootURL.path
+            let physicalPath = rootURL.resolvingSymlinksInPath().standardizedFileURL.path
+            return candidateParent == lexicalPath || candidateParent == physicalPath
         }
-        if Self.isSensitiveName(label) {
-            return .keep(OrphanKeptRow(
-                name: name, path: url.path,
-                reason: "Security-sensitive agent label; kept"
-            ))
+        guard let configuredRoot,
+              (try? URL(fileURLWithPath: configuredRoot, isDirectory: true)
+                .resourceValues(forKeys: [.isSymbolicLinkKey, .volumeIsLocalKey]).isSymbolicLink) != true,
+              (try? URL(fileURLWithPath: configuredRoot, isDirectory: true)
+                .resourceValues(forKeys: [.volumeIsLocalKey]).volumeIsLocal) == true else {
+            return "Path is not a direct child of a local configured cache root"
         }
-        guard Self.isBundleIDCandidate(label) else {
-            return .keep(OrphanKeptRow(
-                name: name, path: url.path,
-                reason: "Agent label \(label) is not a bundle identifier; ownership cannot be proven"
-            ))
+        guard let values = try? candidate.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
+              values.isDirectory == true, values.isSymbolicLink != true else {
+            return "Cache path is missing, linked, or not a directory"
         }
-        switch await bundleLookup.isInstalled(bundleID: label) {
+        let owner = candidate.lastPathComponent
+        guard Self.isBundleIDCandidate(owner),
+              configuration.rebuildableCacheBundleIDs.contains(owner.lowercased()),
+              !Self.isAppleSystemName(owner), !Self.isSensitiveName(owner) else {
+            return "No explicit supported cache-owner policy; kept"
+        }
+        let index = InstalledAppIndex.build(from: configuration.applicationRoots)
+        guard index.isComplete else { return "Installed-app inventory is incomplete; kept" }
+        if index.bundleIDs.contains(owner.lowercased()) {
+            return "Owned by an installed app (\(owner))"
+        }
+        switch await bundleLookup.isInstalledFresh(bundleID: owner) {
         case .installed:
-            return .keep(OrphanKeptRow(
-                name: name, path: url.path,
-                reason: "Agent belongs to installed app \(label)"
-            ))
+            return "Owned by an installed app (\(owner))"
         case .unknown:
-            return .keep(OrphanKeptRow(
-                name: name, path: url.path,
-                reason: "Could not verify the agent owner; kept"
-            ))
+            return "Fresh bundle lookup unavailable or incomplete; kept"
         case .notInstalled:
             break
         }
-        // Program / ProgramArguments are only evidence when absolute
-        // (AGENTS.md); a relative program can resolve anywhere, so it
-        // proves nothing.
-        guard let programPath = Self.absoluteProgramPath(in: plist) else {
-            return .keep(OrphanKeptRow(
-                name: name, path: url.path,
-                reason: "No absolute program path to verify; relative programs are never evidence"
-            ))
-        }
-        if FileManager.default.fileExists(atPath: programPath) {
-            return .keep(OrphanKeptRow(
-                name: name, path: url.path,
-                reason: "Agent program still installed: \(programPath)"
-            ))
-        }
-        if Self.isProtectedHelperPath(programPath) {
-            return .keep(OrphanKeptRow(
-                name: name, path: url.path,
-                reason: "Program path is a protected system helper location"
-            ))
-        }
-        if let lastModified, now.timeIntervalSince(lastModified) < configuration.minimumOrphanAge {
-            return .keep(OrphanKeptRow(
-                name: name, path: url.path,
-                reason: "Agent modified within the retention window"
-            ))
-        }
-        return .orphan(
-            reason: "Agent program no longer exists: \(programPath)",
-            lastModified: lastModified
-        )
+        return Self.inspectCacheTree(
+            at: candidate.path,
+            entryBudget: configuration.sizeWalkEntryBudget,
+            minimumAge: configuration.minimumOrphanAge,
+            whitelist: whitelist,
+            now: Date.now
+        ).protectionReason
     }
 
     // MARK: Name rules
@@ -736,28 +972,6 @@ public struct OrphanScanner: Sendable {
         return regex.firstMatch(in: name, range: range) != nil
     }
 
-    /// Absolute Program / first ProgramArguments path, or nil when absent
-    /// or non-absolute (AGENTS.md absolute-only rule).
-    static func absoluteProgramPath(in plist: [String: Any]) -> String? {
-        if let program = plist["Program"] as? String {
-            return program.hasPrefix("/") ? program : nil
-        }
-        if let args = plist["ProgramArguments"] as? [String], let first = args.first {
-            return first.hasPrefix("/") ? first : nil
-        }
-        return nil
-    }
-
-    /// Helper locations that stay out of orphan verdicts even when their
-    /// file is missing (AGENTS.md: PrivilegedHelperTools helpers are a
-    /// protected family; an updater can temporarily hide the leaf).
-    static func isProtectedHelperPath(_ path: String) -> Bool {
-        let prefixes = [
-            "/Library/PrivilegedHelperTools/", "/System/", "/usr/", "/Library/Apple/",
-        ]
-        return prefixes.contains { path.hasPrefix($0) }
-    }
-
     // MARK: Filesystem helpers
 
     struct ChildEntry {
@@ -766,29 +980,63 @@ public struct OrphanScanner: Sendable {
         let isDirectory: Bool
         let sizeBytes: Int64
         let modified: Date?
+        let protectionReason: String?
     }
 
-    /// Direct children of a root, or nil when the root is unreadable or
-    /// missing. Symlinks are skipped outright: resolving them could escape
-    /// the scanned root, and a linked target is not a leftover.
+    /// Direct children of a local, non-cloud root. Missing roots are ignored;
+    /// unsafe roots and unknown child metadata are represented as kept rows.
+    /// Symlinks are never followed.
     static func directChildren(of root: String) -> [ChildEntry]? {
+        let rootURL = URL(fileURLWithPath: root, isDirectory: true)
+        let fileManager = FileManager.default
+        var rootIsDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: rootURL.path, isDirectory: &rootIsDirectory) else { return nil }
+
+        func keptRoot(_ reason: String) -> [ChildEntry] {
+            [ChildEntry(
+                name: rootURL.lastPathComponent, url: rootURL,
+                isDirectory: rootIsDirectory.boolValue, sizeBytes: 0, modified: nil,
+                protectionReason: reason
+            )]
+        }
+        guard rootIsDirectory.boolValue else { return keptRoot("Scan root is not a directory; kept") }
         let keys: Set<URLResourceKey> = [
             .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey,
+            .volumeIsLocalKey, .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey,
         ]
-        guard let children = try? FileManager.default.contentsOfDirectory(
-            at: URL(fileURLWithPath: root, isDirectory: true),
-            includingPropertiesForKeys: Array(keys),
-            options: []
-        ) else { return nil }
-        return children.compactMap { child in
-            guard let values = try? child.resourceValues(forKeys: keys),
-                  values.isSymbolicLink != true else { return nil }
+        guard let rootValues = try? rootURL.resourceValues(forKeys: keys) else {
+            return keptRoot("Scan root metadata is unavailable; kept")
+        }
+        guard rootValues.isSymbolicLink != true else { return keptRoot("Scan root is linked; kept") }
+        guard rootValues.volumeIsLocal == true, rootValues.isUbiquitousItem != true,
+              rootValues.ubiquitousItemDownloadingStatus == nil else {
+            return keptRoot("Scan root is cloud-backed, non-local, or unknown; kept")
+        }
+        guard let children = try? fileManager.contentsOfDirectory(
+            at: rootURL, includingPropertiesForKeys: Array(keys), options: []
+        ) else { return keptRoot("Scan root is unreadable; kept") }
+        return children.map { child in
+            guard let values = try? child.resourceValues(forKeys: keys) else {
+                return ChildEntry(
+                    name: child.lastPathComponent, url: child, isDirectory: false,
+                    sizeBytes: 0, modified: nil,
+                    protectionReason: "Entry metadata is unavailable; kept"
+                )
+            }
+            if values.isSymbolicLink == true {
+                return ChildEntry(
+                    name: child.lastPathComponent, url: child, isDirectory: false,
+                    sizeBytes: Int64(values.fileSize ?? 0), modified: values.contentModificationDate,
+                    protectionReason: "Symlink entry is kept without following it"
+                )
+            }
             return ChildEntry(
                 name: child.lastPathComponent,
                 url: child,
                 isDirectory: values.isDirectory ?? false,
                 sizeBytes: Int64(values.fileSize ?? 0),
-                modified: values.contentModificationDate
+                modified: values.contentModificationDate,
+                protectionReason: nil
             )
         }
     }

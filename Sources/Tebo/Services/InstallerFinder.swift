@@ -244,6 +244,71 @@ public struct InstallerFinder: Sendable {
         return results.sorted { $0.sizeBytes > $1.sizeBytes }
     }
 
+    /// Recheck a single reviewed installer path immediately before acting.
+    /// Age is intentionally absent: elapsed time never establishes that an
+    /// installer is unnecessary. nil means only that fresh local installer
+    /// evidence still matches; the caller's final activity/identity guard
+    /// must still run before removal.
+    public func removalProtectionReason(for path: String, whitelist: Set<String>) async -> String? {
+        guard SafetyGate.isAllowed(path: path, whitelist: whitelist) else {
+            return "SafetyGate or user whitelist protects this installer path"
+        }
+        let candidate = URL(fileURLWithPath: path).standardizedFileURL
+        let keys: Set<URLResourceKey> = [
+            .isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey,
+            .contentModificationDateKey, .volumeIsLocalKey, .isUbiquitousItemKey,
+            .ubiquitousItemDownloadingStatusKey,
+        ]
+        for rootPath in configuration.searchRoots {
+            let root = URL(fileURLWithPath: rootPath, isDirectory: true).standardizedFileURL
+            guard candidate.path.hasPrefix(root.path + "/") else { continue }
+            let relativeComponents = candidate.path.dropFirst(root.path.count + 1)
+                .split(separator: "/", omittingEmptySubsequences: true)
+            guard !relativeComponents.isEmpty, relativeComponents.count <= configuration.maxDepth else { continue }
+            guard let rootValues = try? root.resourceValues(forKeys: keys),
+                  rootValues.isDirectory == true, rootValues.isSymbolicLink != true,
+                  rootValues.volumeIsLocal == true, rootValues.isUbiquitousItem != true,
+                  rootValues.ubiquitousItemDownloadingStatus == nil else {
+                return "Installer search root is missing, linked, cloud-backed, or non-local"
+            }
+            var parent = root
+            for component in relativeComponents.dropLast() {
+                parent.appendPathComponent(String(component), isDirectory: true)
+                guard let parentValues = try? parent.resourceValues(forKeys: keys),
+                      parentValues.isDirectory == true, parentValues.isSymbolicLink != true,
+                      parentValues.volumeIsLocal == true, parentValues.isUbiquitousItem != true,
+                      parentValues.ubiquitousItemDownloadingStatus == nil else {
+                    return "Installer ancestor is missing, linked, cloud-backed, or non-local"
+                }
+            }
+            guard let values = try? candidate.resourceValues(forKeys: keys),
+                  values.isRegularFile == true, values.isSymbolicLink != true else {
+                return "Installer path is missing, linked, or not a regular file"
+            }
+            guard values.volumeIsLocal == true else {
+                return "Installer file is non-local or locality is unknown"
+            }
+            guard values.isUbiquitousItem != true,
+                  values.ubiquitousItemDownloadingStatus == nil else {
+                return "Installer file is cloud-backed or cloud status is unknown"
+            }
+            guard values.fileSize != nil, values.contentModificationDate != nil else {
+                return "Installer metadata is incomplete"
+            }
+            guard let kind = Self.kind(forExtension: candidate.pathExtension.lowercased()) else {
+                return "Path no longer has an installer file type"
+            }
+            if kind == .zipPayload {
+                guard configuration.inspectZipPayloads,
+                      zipInspector.containsInstallerPayload(zipPath: candidate.path) else {
+                    return "Zip no longer contains positive installer-payload evidence"
+                }
+            }
+            return nil
+        }
+        return "Installer path is outside configured scan roots or depth"
+    }
+
     /// Traversal helper. Internal (not private) so the depth/symlink/zip
     /// rules are unit-testable. `fileDepth` is the depth of the entries
     /// about to be examined (1 = direct children of a search root),
@@ -255,25 +320,31 @@ public struct InstallerFinder: Sendable {
         guard fileDepth <= configuration.maxDepth else { return results }
         let keys: Set<URLResourceKey> = [
             .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey,
-            .volumeIsLocalKey,
+            .volumeIsLocalKey, .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey,
         ]
         let url = URL(fileURLWithPath: root, isDirectory: true)
-        guard let children = try? FileManager.default.contentsOfDirectory(
-            at: url, includingPropertiesForKeys: Array(keys), options: []
-        ) else { return results }
+        guard let rootValues = try? url.resourceValues(forKeys: keys),
+              rootValues.isDirectory == true, rootValues.isSymbolicLink != true,
+              rootValues.volumeIsLocal == true, rootValues.isUbiquitousItem != true,
+              rootValues.ubiquitousItemDownloadingStatus == nil,
+              let children = try? FileManager.default.contentsOfDirectory(
+                at: url, includingPropertiesForKeys: Array(keys), options: []
+              ) else { return results }
 
         for child in children {
             if Task.isCancelled || results.count >= 1000 { break }
             guard let values = try? child.resourceValues(forKeys: keys) else { continue }
             // Mole skips symlinks explicitly (installer.sh:89): a symlinked
             // installer is usually a mounted/copied artifact, and following
-            // links could escape the searched roots.
-            if values.isSymbolicLink == true { continue }
+            // links could escape the searched roots. Unknown locality and any
+            // cloud status are also fail-closed, including directory ancestors.
+            guard values.isSymbolicLink != true, values.volumeIsLocal == true,
+                  values.isUbiquitousItem != true,
+                  values.ubiquitousItemDownloadingStatus == nil else { continue }
             if values.isDirectory == true {
                 // A mounted volume (network share, disk image) under a
                 // download location is not a stray installer and walking
                 // it could cross into a remote filesystem: never descend.
-                if values.volumeIsLocal == false { continue }
                 results += scan(root: child.path, fileDepth: fileDepth + 1)
                 continue
             }

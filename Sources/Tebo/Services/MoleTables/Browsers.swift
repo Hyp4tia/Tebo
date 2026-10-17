@@ -31,6 +31,9 @@ public enum Browsers {
         explanation: String,
         processGuard: MoleProcessGuard? = nil,
         pruneRule: MolePruneRule? = nil,
+        risk: MoleRisk = .review,
+        eligibility: MoleEligibility = .unsupported,
+        reportOnly: Bool = false,
         source: String
     ) -> CleanTarget {
         CleanTarget(
@@ -38,9 +41,12 @@ public enum Browsers {
             group: .browsers,
             path: .homeRelative(path),
             kind: kind,
+            risk: risk,
+            eligibility: eligibility,
             explanation: explanation,
             processGuard: processGuard,
             pruneRule: pruneRule,
+            reportOnly: reportOnly,
             source: source
         )
     }
@@ -52,16 +58,22 @@ public enum Browsers {
         framework: String,
         explanation: String,
         source: String,
-        processGuard: MoleProcessGuard
+        processGuard: MoleProcessGuard,
+        needsAdmin: Bool = false
     ) -> CleanTarget {
         CleanTarget(
             label: label,
             group: .browsers,
             path: path,
             kind: .frameworkVersions(framework: framework),
+            risk: .review,
+            // Removing sealed bundle members needs a verified signature-preservation contract.
+            eligibility: .unsupported,
+            needsAdmin: needsAdmin,
             explanation: explanation,
             processGuard: processGuard,
             pruneRule: .keepCurrentSymlinkTarget,
+            reportOnly: needsAdmin,
             source: source
         )
     }
@@ -85,6 +97,8 @@ public enum Browsers {
             "Library/Caches/Google/Chrome",
             kind: .directorySweep,
             explanation: "Chrome's HTTP cache root. Rebuilt as you browse; profile data is untouched.",
+            processGuard: chromeGuard,
+            risk: .safe,
             source: "mole lib/clean/user.sh:1697"
         ),
         target(
@@ -101,6 +115,8 @@ public enum Browsers {
             kind: .glob,
             explanation: "Compiled JavaScript bytecode per profile. Recompiled on next page load.",
             processGuard: chromeGuard,
+            risk: .safe,
+            eligibility: .rebuildableCache,
             source: "mole lib/clean/user.sh:645"
         ),
         target(
@@ -109,6 +125,8 @@ public enum Browsers {
             kind: .glob,
             explanation: "GPU shader/command scratch per profile. Rebuilt by the GPU process.",
             processGuard: chromeGuard,
+            risk: .safe,
+            eligibility: .rebuildableCache,
             source: "mole lib/clean/user.sh:647"
         ),
         target(
@@ -203,8 +221,9 @@ public enum Browsers {
             "Chrome service worker cache",
             "\(chromeSupport)/*/Service Worker/CacheStorage",
             kind: .glob,
-            explanation: "Per-origin service-worker CacheStorage. Never touches ScriptCache (MV3 extension bytecode) and honors the protected-domain list.",
+            explanation: "Service-worker CacheStorage may contain user-created offline data; retained until reliable per-origin eligibility is available.",
             processGuard: chromeGuard,
+            reportOnly: true,
             source: "mole lib/clean/user.sh:1734"
         ),
         target(
@@ -234,7 +253,8 @@ public enum Browsers {
             framework: "Google Chrome Framework.framework",
             explanation: "Old Chrome framework versions under Contents/Frameworks/.../Versions. Keeps the Current symlink target and any newer staged auto-update; may need elevated permissions to remove.",
             source: "mole lib/clean/user.sh:688",
-            processGuard: chromeGuard
+            processGuard: chromeGuard,
+            needsAdmin: true
         ),
         appBundle(
             "Chrome old versions (user app)",
@@ -259,7 +279,8 @@ public enum Browsers {
             framework: "Microsoft Edge Framework.framework",
             explanation: "Old Edge framework versions. Keeps the Current symlink target and any newer staged auto-update.",
             source: "mole lib/clean/user.sh:704",
-            processGuard: edgeGuard
+            processGuard: edgeGuard,
+            needsAdmin: true
         ),
         appBundle(
             "Edge old versions (user app)",
@@ -379,8 +400,9 @@ public enum Browsers {
             "Brave service worker cache",
             "\(braveSupport)/*/Service Worker/CacheStorage",
             kind: .glob,
-            explanation: "Per-origin service-worker CacheStorage. ScriptCache (MV3 bytecode) and protected domains are never touched.",
+            explanation: "Service-worker CacheStorage can contain user-created offline data; retained until reliable per-origin eligibility is available.",
             processGuard: braveGuard,
+            reportOnly: true,
             source: "mole lib/clean/user.sh:1833"
         ),
         appBundle(
@@ -599,16 +621,18 @@ public enum Browsers {
             "Arc service worker cache",
             "Library/Application Support/Arc/*/Service Worker/CacheStorage",
             kind: .glob,
-            explanation: "Per-origin service-worker CacheStorage; MV3 ScriptCache is never touched.",
+            explanation: "Service-worker CacheStorage may contain user-created offline data; retained until reliable per-origin eligibility is available.",
             processGuard: arcGuard,
+            reportOnly: true,
             source: "mole lib/clean/user.sh:1771"
         ),
         target(
             "Arc service worker cache (User Data)",
             "Library/Application Support/Arc/User Data/*/Service Worker/CacheStorage",
             kind: .glob,
-            explanation: "Service-worker CacheStorage under Arc's User Data root; ScriptCache is never touched.",
+            explanation: "Service-worker CacheStorage under Arc's User Data root may contain user-created offline data; retained until reliable per-origin eligibility is available.",
             processGuard: arcGuard,
+            reportOnly: true,
             source: "mole lib/clean/user.sh:1775"
         ),
 
@@ -696,8 +720,9 @@ public enum Browsers {
             "Dia service worker cache",
             "Library/Application Support/Dia/User Data/*/Service Worker/CacheStorage",
             kind: .glob,
-            explanation: "Per-origin service-worker CacheStorage; MV3 ScriptCache is never touched.",
+            explanation: "Service-worker CacheStorage may contain user-created offline data; retained until reliable per-origin eligibility is available.",
             processGuard: diaGuard,
+            reportOnly: true,
             source: "mole lib/clean/user.sh:1812"
         ),
 
@@ -889,8 +914,9 @@ public enum Browsers {
             "Vivaldi service worker cache",
             "Library/Application Support/Vivaldi/*/Service Worker/CacheStorage",
             kind: .glob,
-            explanation: "Per-origin service-worker CacheStorage; MV3 ScriptCache is never touched.",
+            explanation: "Service-worker CacheStorage may contain user-created offline data; retained until reliable per-origin eligibility is available.",
             processGuard: vivaldiGuard,
+            reportOnly: true,
             source: "mole lib/clean/user.sh:1891"
         ),
 

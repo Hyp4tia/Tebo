@@ -44,11 +44,11 @@ struct ScanMemoryTests {
         [
             CleanTarget(
                 label: "sweep", group: .appCaches, path: .homeRelative("Library/Caches"),
-                kind: .directorySweep, explanation: "memory fixture", source: "test"
+                kind: .directorySweep, eligibility: .manualReview, explanation: "memory fixture", source: "test"
             ),
             CleanTarget(
                 label: "glob", group: .appCaches, path: .homeRelative("Library/Caches/app1*"),
-                kind: .glob, explanation: "memory fixture", source: "test"
+                kind: .glob, eligibility: .manualReview, explanation: "memory fixture", source: "test"
             ),
         ]
     }

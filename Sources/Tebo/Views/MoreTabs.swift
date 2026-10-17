@@ -37,8 +37,11 @@ struct ToolboxView: View {
     }
 
     var body: some View {
-        // Snapshot the whitelist now (Sendable value for the async scans).
-        let whitelist = appState.whitelist
+        let projectRoots = MolePaths.projectSearchRoots
+        let projectScanner = ProjectArtifactScanner(roots: projectRoots)
+        let projectRemovalValidator = CleanupRemovalValidator(projectRoots: projectRoots)
+        let installerConfiguration = InstallerScanConfiguration.defaults()
+        let installerRemovalValidator = CleanupRemovalValidator(installerConfiguration: installerConfiguration)
         VStack(alignment: .leading, spacing: 12) {
             // Sub-navigation stays inside the page, never touches the window tab bar.
             HStack(spacing: 4) {
@@ -59,13 +62,31 @@ struct ToolboxView: View {
                 ScanTab(
                     tabID: "purge",
                     title: "Purge",
-                    subtitle: "Rebuildable project folders: node_modules, target, dist",
+                    subtitle: "Project artifact folders: node_modules, target, dist (read-only review)",
                     icon: "hammer",
-                    removalValidator: { await ProjectArtifactScanner().protectionReason(for: URL(fileURLWithPath: $0), whitelist: whitelist) },
-                    runScan: {
-                        return await CleanerService().findProjectArtifacts(whitelist: whitelist)
+                    scanScope: projectRoots,
+                    moleRemovalValidator: { row, currentWhitelist in
+                        await projectRemovalValidator.protectionReason(for: row, whitelist: currentWhitelist)
                     },
-                    extraInfo: { Text("Repositories, tracked files and deployment keys stay protected.").font(.caption).foregroundStyle(.secondary) }
+                    runScan: {
+                        guard appState.refreshProtections() == nil else {
+                            appState.setScanNote("Project cleanup is blocked until protection settings are reloaded.", for: "purge")
+                            return []
+                        }
+                        let report = await projectScanner.scan(whitelist: appState.whitelist)
+                        appState.advisoriesByTab["purge"] = report.kept
+                        appState.setScanNote(report.partial
+                            ? "Project scan stopped early; unverified artifacts stay read-only."
+                            : "\(report.rows.count) reviewed artifacts found.", for: "purge")
+                        return report.rows
+                    },
+                    extraInfo: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Repositories, tracked files and deployment keys stay protected.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            ReviewPanel(note: appState.scanNote(for: "purge"), advisories: appState.advisories(for: "purge"))
+                        }
+                    }
                 )
             case .installers:
                 ScanTab(
@@ -73,8 +94,23 @@ struct ToolboxView: View {
                     title: "Installers",
                     subtitle: "DMG, PKG, ISO, XIP left in Downloads",
                     icon: "archivebox",
+                    scanScope: installerConfiguration.searchRoots,
+                    recommendedExplanation: "All installers need individual review. Age alone does not show whether you still need one.",
+                    moleRemovalValidator: { row, currentWhitelist in
+                        await installerRemovalValidator.protectionReason(for: row, whitelist: currentWhitelist)
+                    },
                     runScan: {
-                        return await CleanerService().findInstallers(whitelist: whitelist)
+                        guard appState.refreshProtections() == nil else {
+                            appState.setScanNote("Installer cleanup is blocked until protection settings are reloaded.", for: "installer")
+                            return []
+                        }
+                        let files = await InstallerFinder(configuration: installerConfiguration).findInstallers()
+                        appState.setScanNote("\(files.count) installers found across \(installerConfiguration.searchRoots.count) search locations.", for: "installer")
+                        return files.map {
+                            ScanResult(id: $0.id, path: $0.path, sizeBytes: $0.sizeBytes, category: $0.source,
+                                       reason: "\($0.kind.rawValue.uppercased()) installer",
+                                       recommendedForSelection: false, cleanupSource: .installer)
+                        }
                     }
                 )
             case .fixers:
@@ -255,11 +291,16 @@ struct SettingsView: View {
                 .font(.callout)
             }
             Section("Whitelist: never touch these") {
+                if let error = appState.protectionError {
+                    Text(error).font(.callout).foregroundStyle(.orange)
+                }
+                Button("Reload protections") { appState.reloadProtections() }
                 ForEach(Array(appState.whitelist).sorted(), id: \.self) { entry in
                     HStack {
                         TeboPath(path: entry)
                         Spacer()
                         Button("Remove") { appState.removeWhitelist(entry) }
+                            .disabled(appState.protectionError != nil)
                     }
                 }
                 HStack {
@@ -268,9 +309,11 @@ struct SettingsView: View {
                         appState.addWhitelist(newEntry)
                         newEntry = ""
                     }
-                    .disabled(newEntry.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(newEntry.trimmingCharacters(in: .whitespaces).isEmpty || appState.protectionError != nil)
                 }
-                Text("Saved to ~/.config/tebo/whitelist and applied before every scan.")
+                Text("Saved to ~/.config/tebo/whitelist and refreshed for File cleanup scans and removals.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("Mandatory backup, model and live-environment protections remain active even with an empty custom list.")
                     .font(.caption).foregroundStyle(.secondary)
                 Text("Action names such as cache_refresh also protect maintenance tasks.")
                     .font(.caption).foregroundStyle(.secondary)

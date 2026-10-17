@@ -4,8 +4,8 @@ import Foundation
 // The ONLY code path in the app allowed to call FileManager.trashItem.
 // Ports Mole's safe_remove pipeline (lib/core/file_ops.sh): validate, bind
 // the file's identity, re-verify right before the move, and fail closed on
-// every mismatch. A rename-and-recreate race can never turn an approved
-// path into permission to trash the file that replaced it.
+// every observed mismatch. Pathname-based Trash moves still have a small
+// non-atomic window after the final checks.
 
 // MARK: - SkipReason
 
@@ -14,13 +14,17 @@ public enum SkipReason: Sendable, Equatable {
     case invalidPath(PathValidator.Reason)
     case missing
     case identityChanged
+    case cancelled
+    case safetyCheck(String)
 
     /// Human-readable line for the report UI.
     public var displayText: String {
         switch self {
         case .invalidPath(let reason): return "blocked: \(reason.rawValue)"
-        case .missing: return "file no longer exists"
-        case .identityChanged: return "file changed during delete"
+        case .missing: return "item is missing or unreadable"
+        case .identityChanged: return "review evidence changed or is unavailable; rescan"
+        case .cancelled: return "cancelled before the move"
+        case .safetyCheck(let reason): return "kept: \(reason)"
         }
     }
 }
@@ -59,7 +63,7 @@ public struct DeleteReport: Sendable, Equatable {
 
     // MARK: Derived totals (what the UI footer shows)
 
-    /// Bytes actually reclaimed (sum of trashed item sizes).
+    /// Logical bytes moved to Trash, not measured free-space gain.
     public var freedBytes: Int64 {
         outcomes.reduce(0) { total, outcome in
             if case .trashed(let bytes) = outcome.result { return total + bytes }
@@ -107,16 +111,31 @@ public struct DeletePipeline: Sendable {
         paths: [String],
         whitelist: Set<String>,
         expectedIdentities: [String: FileIdentity] = [:],
+        expectedBindings: [String: PathBinding] = [:],
+        requirePreviewIdentity: Bool = false,
+        enforceCleanupSafety: Bool = false,
+        protectionURL: URL? = nil,
         additionalValidation: (@Sendable (String) async -> String?)? = nil,
         beforeMove: (@Sendable (String) async -> Void)? = nil
     ) async -> DeleteReport {
         var outcomes: [DeleteReport.Outcome] = []
         outcomes.reserveCapacity(paths.count)
         for path in paths {
-            if Task.isCancelled { break }
+            if Task.isCancelled {
+                outcomes.append(.init(path: path, result: .skipped(reason: .cancelled)))
+                continue
+            }
+            let protections = requirePreviewIdentity || enforceCleanupSafety ? WhitelistStore.snapshot(from: protectionURL) : nil
+            if let error = protections?.error {
+                outcomes.append(.init(path: path, result: .skipped(reason: .safetyCheck(error))))
+                continue
+            }
             outcomes.append(
-                await trashOne(path: path, whitelist: whitelist,
-                    expectedIdentity: expectedIdentities[path], additionalValidation: additionalValidation, beforeMove: beforeMove)
+                await trashOne(path: path, whitelist: whitelist.union(protections?.entries ?? []),
+                    expectedIdentity: expectedIdentities[path], expectedBinding: expectedBindings[path],
+                    requirePreviewIdentity: requirePreviewIdentity || enforceCleanupSafety,
+                    enforceCleanupSafety: enforceCleanupSafety, protections: protections, protectionURL: protectionURL,
+                    additionalValidation: additionalValidation, beforeMove: beforeMove)
             )
         }
         return DeleteReport(outcomes: outcomes)
@@ -128,6 +147,11 @@ public struct DeletePipeline: Sendable {
         path: String,
         whitelist: Set<String>,
         expectedIdentity: FileIdentity?,
+        expectedBinding: PathBinding?,
+        requirePreviewIdentity: Bool,
+        enforceCleanupSafety: Bool,
+        protections: WhitelistStore.Snapshot?,
+        protectionURL: URL?,
         additionalValidation: (@Sendable (String) async -> String?)?,
         beforeMove: (@Sendable (String) async -> Void)?
     ) async -> DeleteReport.Outcome {
@@ -138,35 +162,85 @@ public struct DeletePipeline: Sendable {
         }
 
         // 2. Bind the file's identity before any other work.
-        guard let bound = FileIdentity.read(path: path) else {
+        if requirePreviewIdentity, expectedIdentity == nil || expectedBinding == nil {
+            return DeleteReport.Outcome(path: path, result: .skipped(reason: .identityChanged))
+        }
+        guard let binding = PathBinding.read(path: path) else {
             await OperationLog.shared.record("Skipped \(path): file no longer exists")
             return DeleteReport.Outcome(path: path, result: .skipped(reason: .missing))
         }
-        if let expectedIdentity, bound != expectedIdentity {
+        if let expectedIdentity, binding.leaf != expectedIdentity {
             await OperationLog.shared.record("Skipped \(path): changed since preview")
+            return DeleteReport.Outcome(path: path, result: .skipped(reason: .identityChanged))
+        }
+        if let expectedBinding, binding != expectedBinding {
             return DeleteReport.Outcome(path: path, result: .skipped(reason: .identityChanged))
         }
 
         // 3. Measure for the report. This is the expensive window: the file
         //    can be swapped while the size walk runs, hence the recheck.
-        let bytes = CleanerService().recursiveSize(at: path)
+        var bytes = enforceCleanupSafety ? 0 : CleanerService().recursiveSize(at: path)
 
         // 4. Re-validate: the object under the path must still be the SAME one.
-        guard let current = FileIdentity.read(path: path), current == bound else {
+        guard PathBinding.read(path: path) == binding else {
             await OperationLog.shared.record("Skipped \(path): identity changed during delete")
             return DeleteReport.Outcome(path: path, result: .skipped(reason: .identityChanged))
         }
 
+        // A late filesystem change must be visible to the rule's final validator.
+        await beforeMove?(path)
+        guard !Task.isCancelled else {
+            return DeleteReport.Outcome(path: path, result: .skipped(reason: .cancelled))
+        }
+        if enforceCleanupSafety {
+            guard additionalValidation != nil else {
+                return DeleteReport.Outcome(path: path, result: .skipped(reason: .safetyCheck("Cleanup rule evidence is missing; rescan before removal.")))
+            }
+            guard let measuredBytes = cleanupSize(path: path, whitelist: whitelist) else {
+                return DeleteReport.Outcome(path: path, result: .skipped(reason: .safetyCheck("Protected content or incomplete evidence; item kept.")))
+            }
+            bytes = measuredBytes
+            if let reason = await CleanupActivityGuard.reason(for: path) {
+                return DeleteReport.Outcome(path: path, result: .skipped(reason: .safetyCheck(reason)))
+            }
+        }
         if let reason = await additionalValidation?(path) {
             await OperationLog.shared.record("Skipped \(path): \(reason)")
-            return DeleteReport.Outcome(path: path, result: .failed(message: reason))
+            // A deliberate Mole refusal is a kept item, not an unexpected Trash error.
+            let result: DeleteReport.Outcome.Result = requirePreviewIdentity
+                ? .skipped(reason: .safetyCheck(reason)) : .failed(message: reason)
+            return DeleteReport.Outcome(path: path, result: result)
         }
-        await beforeMove?(path)
 
-        // 5. Final identity check immediately before the move. An unavoidable
-        //    microsecond window remains (Mole notes the same); this recheck
-        //    shrinks it to one stat before trashItem.
-        guard let final = FileIdentity.read(path: path), final == bound else {
+        // Cancellation can arrive during measurement or an awaited guard, not just between rows.
+        guard !Task.isCancelled else {
+            return DeleteReport.Outcome(path: path, result: .skipped(reason: .cancelled))
+        }
+
+        if let protections {
+            let current = WhitelistStore.snapshot(from: protectionURL)
+            guard current.error == nil, current.entries == protections.entries else {
+                return DeleteReport.Outcome(path: path, result: .skipped(reason: .safetyCheck(current.error ?? "Protection settings changed; rescan before removal.")))
+            }
+        }
+        if let reason = PathValidator.validate(path: path, whitelist: whitelist) {
+            return DeleteReport.Outcome(path: path, result: .skipped(reason: .invalidPath(reason)))
+        }
+
+        // Awaited probes allow nested changes that do not change the parent's binding.
+        if enforceCleanupSafety {
+            guard let measuredBytes = cleanupSize(path: path, whitelist: whitelist) else {
+                return DeleteReport.Outcome(path: path, result: .skipped(reason: .safetyCheck("Protected content or incomplete evidence; item kept.")))
+            }
+            bytes = measuredBytes
+        }
+        guard !Task.isCancelled else {
+            return DeleteReport.Outcome(path: path, result: .skipped(reason: .cancelled))
+        }
+
+        // Final bindings follow every awaited guard. The Trash API cannot make these
+        // pathname checks atomic with its move, so a residual race remains.
+        guard PathBinding.read(path: path) == binding else {
             await OperationLog.shared.record("Skipped \(path): identity changed before move")
             return DeleteReport.Outcome(path: path, result: .skipped(reason: .identityChanged))
         }
@@ -187,5 +261,12 @@ public struct DeletePipeline: Sendable {
                 result: .failed(message: error.localizedDescription)
             )
         }
+    }
+
+    private func cleanupSize(path: String, whitelist: Set<String>) -> Int64? {
+        let measured = FileTreeMeasurement.read(URL(fileURLWithPath: path), stopAtSafetyEvidence: true, whitelist: whitelist)
+        guard measured.status == .complete, measured.protectedPath == nil,
+              !measured.containsRepository, !measured.containsCredentials else { return nil }
+        return measured.bytes
     }
 }

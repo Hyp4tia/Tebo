@@ -28,6 +28,7 @@ public enum DeveloperTools {
         kind: MoleTargetKind,
         explanation: String,
         risk: MoleRisk = .safe,
+        eligibility: MoleEligibility = .unsupported,
         processGuard: MoleProcessGuard? = nil,
         pruneRule: MolePruneRule? = nil,
         source: String
@@ -38,6 +39,7 @@ public enum DeveloperTools {
             path: .homeRelative(path),
             kind: kind,
             risk: risk,
+            eligibility: eligibility,
             explanation: explanation,
             processGuard: processGuard,
             pruneRule: pruneRule,
@@ -147,6 +149,7 @@ public enum DeveloperTools {
             "Library/Developer/Xcode/iOS DeviceSupport",
             kind: .directorySweep,
             explanation: "Debug-symbol versions (1-3 GB each). Keeps the 2 most recent; older versions regenerate when a device with that iOS version reconnects.",
+            eligibility: .manualReview,
             processGuard: xcodeGuard,
             pruneRule: deviceSupportPrune,
             source: "mole lib/clean/dev.sh:2823"
@@ -156,6 +159,7 @@ public enum DeveloperTools {
             "Library/Developer/Xcode/watchOS DeviceSupport",
             kind: .directorySweep,
             explanation: "Same keep-2 rule for watchOS debug symbols; regenerated on device connect.",
+            eligibility: .manualReview,
             processGuard: xcodeGuard,
             pruneRule: deviceSupportPrune,
             source: "mole lib/clean/dev.sh:2824"
@@ -165,6 +169,7 @@ public enum DeveloperTools {
             "Library/Developer/Xcode/tvOS DeviceSupport",
             kind: .directorySweep,
             explanation: "Same keep-2 rule for tvOS debug symbols; regenerated on device connect.",
+            eligibility: .manualReview,
             processGuard: xcodeGuard,
             pruneRule: deviceSupportPrune,
             source: "mole lib/clean/dev.sh:2825"

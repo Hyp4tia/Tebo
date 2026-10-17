@@ -2,6 +2,21 @@
 
 ## Current work
 
+[Mole safety hardening](.hermes/plans/2026-10-16_022302-safety-hardening.md)
+passes the current full gate: build, 315 tests in 42 suites and self-test.
+The separate requested review and follow-up are reconciled: the confirmed
+reporting defect is fixed, with no new confirmed defect. The task plan owns
+the detailed report and limits. Renewed native checks verified refusal reporting,
+read-only settlement, a positive Trash move, Preview restoration and byte-exact
+Finder recovery. The specific Finder Put Back UI action remains unverified after
+automation failures; direct recovery is not a substitute for that acceptance.
+Only two table rules allow automatic recommendations;
+five require manual review and 462 stay read-only. Media hardening is deferred.
+The installed/public 1.2 app is unchanged. These changes affect source only;
+no corrective app release or installed-app replacement is included.
+
+### Existing shipped state
+
 [External release preparation](.hermes/plans/2026-10-14_release-preparation.md)
 has a verified, notarized 1.2/build 3 app and DMG, signed GitHub appcast, portable
 video helpers and source companions. The updater passed actual installation and

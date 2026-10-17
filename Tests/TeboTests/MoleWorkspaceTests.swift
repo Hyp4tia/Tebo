@@ -15,6 +15,10 @@ struct MoleWorkspaceTests {
         try Data(value.utf8).write(to: file)
         return file
     }
+    private func normalizedPath(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
+            .replacingOccurrences(of: "/private/var/", with: "/var/")
+    }
     private func app(_ root: URL, _ name: String, _ id: String) throws -> URL {
         let url = root.appendingPathComponent("Applications/\(name).app")
         let info: [String: String] = ["CFBundleIdentifier": id, "CFBundleName": name, "CFBundleShortVersionString": "1.0"]
@@ -66,7 +70,10 @@ struct MoleWorkspaceTests {
         let editor = try #require(inventory.first { $0.path == appURL.path })
         #expect(inventory.first { $0.bundleID == "com.apple.fixture" }?.protectedReason != nil)
         let plan = await service.plan(for: editor, whitelist: [], runningBundleIDs: [])
-        #expect(plan.rows.contains { $0.path == cache.deletingLastPathComponent().path })
+        #expect(plan.rows.count == 1)
+        #expect(plan.rows.first?.category == "Application")
+        #expect(!plan.rows.contains { $0.path == cache.deletingLastPathComponent().path })
+        #expect(plan.kept.contains { $0.id.hasSuffix("/Caches/org.fixture.editor") })
         #expect(!plan.rows.contains { $0.path.contains("editor-extra") })
         let running = await service.plan(for: editor, whitelist: [], runningBundleIDs: [editor.bundleID])
         #expect(running.rows.isEmpty)
@@ -84,9 +91,10 @@ struct MoleWorkspaceTests {
         let application = try #require(service.inventory().first { $0.path == first.path })
         let plan = await service.plan(for: application, whitelist: [], runningBundleIDs: [])
         _ = try app(root, "Second", "ORG.FIXTURE.SHARED")
+        #expect(!plan.rows.contains { $0.path == cache.path })
+        #expect(plan.kept.contains { $0.id == cache.path })
         let result = await service.execute(plan, selectedPaths: [cache.path], whitelist: [], runningBundleIDs: [])
         #expect(result.trashedCount == 0)
-        #expect(result.failedCount == 1)
         #expect(FileManager.default.fileExists(atPath: cache.path))
     }
 
@@ -106,9 +114,9 @@ struct MoleWorkspaceTests {
         let metadata = try #require(service.inventory().first)
         let plan = await service.plan(for: metadata, whitelist: [], runningBundleIDs: [])
         let report = await service.execute(plan, selectedPaths: Set(plan.rows.map(\.path)), whitelist: [], runningBundleIDs: [])
-        #expect(report.trashedCount == 2)
+        #expect(report.trashedCount == 1)
         #expect(!FileManager.default.fileExists(atPath: application.path))
-        #expect(!FileManager.default.fileExists(atPath: cache.path))
+        #expect(FileManager.default.fileExists(atPath: cache.path))
     }
 
     @Test("Files replaced after preview survive the deletion boundary")
@@ -131,10 +139,11 @@ struct MoleWorkspaceTests {
         _ = try write(root, "swift/.build/output")
         let service = ProjectArtifactScanner(roots: [root.path])
         let report = await service.scan(whitelist: [])
-        #expect(report.rows.contains { $0.path.hasSuffix("/.build") })
-        #expect(!report.rows.contains { $0.path.hasSuffix("/node_modules") || $0.path.hasSuffix("/target") })
-        #expect(report.kept.count == 2)
-        #expect(report.rows.allSatisfy { !$0.recommendedForSelection })
+        #expect(report.rows.isEmpty)
+        #expect(report.kept.count == 3)
+        #expect(report.kept.contains { $0.id.hasSuffix("/node_modules") })
+        #expect(report.kept.contains { $0.id.hasSuffix("/target") })
+        #expect(report.kept.contains { $0.id.hasSuffix("/.build") })
     }
 
     @Test("Project cleanup keeps a newly changed folder unticked even if its files are old")
@@ -146,12 +155,12 @@ struct MoleWorkspaceTests {
         try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: file.path)
         try FileManager.default.setAttributes([.modificationDate: Date.now], ofItemAtPath: folder.path)
         let report = await ProjectArtifactScanner(roots: [root.path]).scan(whitelist: [])
-        let row = try #require(report.rows.first)
-        #expect(!row.recommendedForSelection)
-        #expect(row.reason.contains("recent activity"))
-        try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: folder.path)
-        let inactive = await ProjectArtifactScanner(roots: [root.path]).scan(whitelist: [])
-        #expect(inactive.rows.first?.recommendedForSelection == true)
+        #expect(report.rows.isEmpty)
+        #expect(report.kept.contains { normalizedPath($0.id) == normalizedPath(folder.path) })
+        #expect(report.kept.first(where: { normalizedPath($0.id) == normalizedPath(folder.path) })?.detail.localizedCaseInsensitiveContains("review") == true)
+
+        let active = await ProjectArtifactScanner(roots: [root.path]).protectionReason(for: folder, whitelist: [])
+        #expect(active?.localizedCaseInsensitiveContains("activity") == true)
     }
 
     @Test("Purge recognizes Git-tracked authored files")
@@ -164,7 +173,7 @@ struct MoleWorkspaceTests {
         #expect(staged.terminationStatus == 0)
         let report = await ProjectArtifactScanner(roots: [root.path]).scan(whitelist: [])
         #expect(report.rows.isEmpty)
-        #expect(report.kept.contains { $0.detail == "Contains Git-tracked files" })
+        #expect(report.kept.contains { $0.id.hasSuffix("/build") && $0.detail.localizedCaseInsensitiveContains("repository") })
     }
 
     @Test("The process runner drains output larger than a pipe buffer")
@@ -178,9 +187,12 @@ struct MoleWorkspaceTests {
     @Test("Maintenance scans skip live and protected preferences")
     func maintenanceGuard() async throws {
         let root = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
-        _ = try write(root, "Library/Preferences/org.fixture.idle.plist", "corrupt")
-        _ = try write(root, "Library/Preferences/org.fixture.running.plist", "corrupt")
-        _ = try write(root, "Library/Preferences/com.apple.test.plist", "corrupt")
+        // A bare word is a valid scalar plist, so use genuinely malformed XML.
+        let malformed = "<plist version=\"1.0\"><dict>"
+        #expect((try? PropertyListSerialization.propertyList(from: Data(malformed.utf8), format: nil)) == nil)
+        _ = try write(root, "Library/Preferences/org.fixture.idle.plist", malformed)
+        _ = try write(root, "Library/Preferences/org.fixture.running.plist", malformed)
+        _ = try write(root, "Library/Preferences/com.apple.test.plist", malformed)
         let report = await MaintenanceScanner(home: root.path).scan(.brokenPreferences, whitelist: [], runningIDs: ["org.fixture.running"])
         #expect(report.rows.count == 1)
         #expect(report.rows.first?.path.hasSuffix("idle.plist") == true)
@@ -189,7 +201,7 @@ struct MoleWorkspaceTests {
         let valid = try PropertyListSerialization.data(fromPropertyList: ["restored": true], format: .xml, options: 0)
         try valid.write(to: URL(fileURLWithPath: idle.path))
         #expect(MaintenanceScanner(home: root.path).removalReason(path: idle.path, mode: .brokenPreferences,
-            whitelist: [], runningIDs: []) == "Preferences are now valid; file kept")
+            whitelist: [], runningIDs: []) == "This is a valid property list; file kept")
     }
 
     @Test("Live rates never invent an initial sample or negative counter delta")
