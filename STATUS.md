@@ -15,9 +15,15 @@ running" while it was not. An independent adversarial review found no
 removal-safety defect; it confirmed the documented checkout tolerance and the
 Mole-parity probe substring, and its sink-self-sufficiency suggestion is applied
 and tested. 63 table rules allow automatic recommendations, two require manual
-review and 409 stay read-only. Media hardening is deferred. The
-installed/public 1.2 app is unchanged. These changes affect source only; no
-corrective app release or installed-app replacement is included.
+review and 409 stay read-only. Media hardening is deferred.
+
+Tebo 1.3/build 4 shipped this change: commit 35d5763, tag v1.3, Developer ID
+signed, notarized and stapled app and DMG, signed appcast published as the
+latest release with checksums and both source companions
+([release](https://github.com/Hyp4tia/Tebo/releases/tag/v1.3)). The public feed
+serves 1.3 build 4, so the installed 1.2 app updates through Check for Updates.
+Portable helper inputs were reconstructed from the 1.2 pinned artifacts; the
+helper recipe and pins are unchanged.
 
 [Mole safety hardening](.hermes/plans/2026-10-16_022302-safety-hardening.md)
 passes the current full gate: build, tests and self-test.
